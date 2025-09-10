@@ -1,8 +1,8 @@
 #ifndef API_H
 #define API_H
 
-#include "types.h"
 #include "config.h"
+#include "types.h"
 
 // ---------- GLOBAL DATA ----------
 extern int breads_id[MAX_KEYS];

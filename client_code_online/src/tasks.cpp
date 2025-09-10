@@ -7,6 +7,7 @@
 #include "config.h"
 
 void fetchInitTask(void* param) {
+    
     init_success = false;
     setStatus(STATUS_API_WAITING);
     while (!fetchInitData()) {
@@ -111,13 +112,15 @@ int calculateCookTime(const CurrentTicketResponse& cur) {
 }
 
 void ticketFlowTask(void* param) {
+  
   unsigned long lastCheckTime = 0;
   const unsigned long checkInterval = 300000UL; // 5 minutes
 
   while (true) {
-    unsigned long now = millis();
 
-    // only skip if no queue AND interval hasn't expired
+    unsigned long now = millis();
+    Serial.println("ESP32 started!");
+    mqttPublishError("hello");
     if (!hasCustomerInQueue && (now - lastCheckTime < checkInterval)) {
       vTaskDelay(5000 / portTICK_PERIOD_MS);
       continue;
@@ -134,11 +137,11 @@ void ticketFlowTask(void* param) {
 
     hasCustomerInQueue = true;
     int ticketId = cur.current_ticket_id;
-    announceTicket(ticketId);
+    //announceTicket(ticketId);
 
     // 2. Cook time (seconds)
     int cookTimeSeconds = calculateCookTime(cur);
-    announceNextTicketReadyIn(cookTimeSeconds);
+    //announceNextTicketReadyIn(cookTimeSeconds);
     unsigned long deadline = millis() + (cookTimeSeconds * 1000UL);
 
     // 3. Wait for scan or timeout
@@ -147,7 +150,7 @@ void ticketFlowTask(void* param) {
       if (ticketScannedId == ticketId) {
         ticketScannedId = -1;
         NextTicketResponse resp = apiNextTicket(ticketId);
-        showBreadsOnDisplay(resp);
+        //showBreadsOnDisplay(resp);
         vTaskDelay(60000 / portTICK_PERIOD_MS); // +1 minute wait
         processed = true;
       }

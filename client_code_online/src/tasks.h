@@ -1,6 +1,7 @@
 #ifndef TASKS_H
 #define TASKS_H
 
+#include "config.h"
 #include "types.h"
 
 // ---------- TASK FUNCTIONS ----------

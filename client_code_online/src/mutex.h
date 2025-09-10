@@ -2,6 +2,7 @@
 #define MUTEX_H
 
 #include <Arduino.h>
+#include "config.h"
 
 // ---------- MUTEX MANAGEMENT ----------
 extern SemaphoreHandle_t busyMutex;

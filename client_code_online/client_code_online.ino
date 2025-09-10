@@ -1,16 +1,18 @@
-#include <LittleFS.h>
-#include "includes/config.h"
-#include "includes/types.h"
-#include "includes/network.h"
-#include "includes/mqtt.h"
-#include "includes/mutex.h"
-#include "includes/display.h"
-#include "includes/api.h"
-#include "includes/tasks.h"
+  #include <LittleFS.h>
+  #include "src/config.h"
+  #include "src/types.h"
+  #include "src/network.h"
+  #include "src/mqtt.h"
+  #include "src/mutex.h"
+  #include "src/display.h"
+  #include "src/api.h"
+  #include "src/tasks.h"
 
 
 void setup() {
   // Filesystem
+  Serial.begin(115200);
+  delay(1000);
   LittleFS.begin();
 
   // Display init

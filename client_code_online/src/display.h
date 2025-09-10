@@ -2,8 +2,8 @@
 #define DISPLAY_H
 
 #include <LedControl.h>
-#include "types.h"
 #include "config.h"
+#include "types.h"
 
 // ---------- DISPLAY OBJECTS ----------
 extern LedControl lc;

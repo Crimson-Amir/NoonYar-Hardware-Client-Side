@@ -32,7 +32,7 @@ bool fetchInitData() {
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 
-  String url = String("http://noonyar.ir/hc/hardware_init?bakery_id=") + bakery_id;
+  String url = String("http://cos.voidtrek.com:80/hc/hardware_init?bakery_id=") + bakery_id;
 
   for (int tries = 0; tries < MAX_HTTP_RETRIES; tries++) {
     String resp = sendHttpRequest(url, "GET", "", INIT_HTTP_TIMEOUT);
@@ -72,7 +72,7 @@ int apiNewCustomer(const std::vector<int>& breads) {
   }
   String body; serializeJson(bodyDoc, body);
 
-  String resp = sendHttpRequest("http://noonyar.ir/hc/new_customer", "POST", body);
+  String resp = sendHttpRequest("http://94.228.165.251:8000/hc/new_customer", "POST", body);
   if (resp.isEmpty()) {
     mqttPublishError("nc:http_fail");
     return -1;
@@ -101,7 +101,7 @@ NextTicketResponse apiNextTicket(int customer_ticket_id) {
   bodyDoc["customer_ticket_id"] = customer_ticket_id;
   String body; serializeJson(bodyDoc, body);
 
-  String resp = sendHttpRequest("http://noonyar.ir/hc/nt", "PUT", body);
+  String resp = sendHttpRequest("http://94.228.165.251:8000/hc/nt", "PUT", body);
   if (resp.isEmpty()) {
     mqttPublishError("nt:http_fail");
     r.error = "http_fail"; 
@@ -134,7 +134,7 @@ NextTicketResponse apiNextTicket(int customer_ticket_id) {
 CurrentTicketResponse apiCurrentTicket() {
   CurrentTicketResponse r;
 
-  String resp = sendHttpRequest(String("http://noonyar.ir/hc/ct/") + bakery_id, "GET");
+  String resp = sendHttpRequest(String("http://94.228.165.251:8000/hc/ct/") + bakery_id, "GET");
   if (resp.isEmpty()) {
     mqttPublishError("ct:http_fail");
     r.error = "http_fail"; 
@@ -169,6 +169,6 @@ bool apiSkipTicket(int customer_ticket_id) {
   bodyDoc["customer_ticket_id"] = customer_ticket_id;
   String body; serializeJson(bodyDoc, body);
 
-  String resp = sendHttpRequest("http://noonyar.ir/hc/ct/st", "PUT", body);
+  String resp = sendHttpRequest("http://94.228.165.251:8000/hc/ct/st", "PUT", body);
   return !resp.isEmpty();
 }

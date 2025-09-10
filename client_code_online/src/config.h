@@ -23,15 +23,18 @@ extern const int   mqtt_port;
 extern bool hasCustomerInQueue;
 extern volatile int ticketScannedId;
 
+extern unsigned long lastConnectivityCheck;
+
 // ---------- TIMING CONFIG ----------
-#define WIFI_RECONNECT_INTERVAL  3500
-#define MQTT_RECONNECT_INTERVAL  2500
+#define WIFI_RECONNECT_INTERVAL  5000
+#define MQTT_RECONNECT_INTERVAL  3000
 #define DEADLOCK_TIMEOUT        30000
 #define BUSY_TIMEOUT             3000
-#define MQTT_QUEUE_TIMEOUT       1000
+#define MQTT_QUEUE_TIMEOUT       2000
 #define HTTP_TIMEOUT            15000
 #define INIT_HTTP_TIMEOUT        7000
 #define INIT_RETRY_DELAY         5000
-#define HTTP_RETRY_DELAY          800
+#define HTTP_RETRY_DELAY         2000
+#define CONNECTIVITY_CHECK_INTERVAL 1000
 
 #endif

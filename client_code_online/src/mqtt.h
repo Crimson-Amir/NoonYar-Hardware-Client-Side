@@ -1,8 +1,8 @@
 #ifndef MQTT_H
 #define MQTT_H
 
-#include "types.h"
 #include "config.h"
+#include "types.h"
 
 // ---------- MQTT QUEUE MANAGEMENT ----------
 extern SemaphoreHandle_t mqttQueueMutex;

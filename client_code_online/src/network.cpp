@@ -41,7 +41,14 @@ bool isNetworkReady() {
 }
 
 void ensureConnectivity() {
+
+  if (millis() - lastConnectivityCheck < CONNECTIVITY_CHECK_INTERVAL) {
+      return;
+  }
+  lastConnectivityCheck = millis();
+
   if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("ensure connectivity wifi");
     setStatus(STATUS_WIFI_ERROR);
     setNetworkBlock(true);
     if (millis() - lastWifiAttempt > WIFI_RECONNECT_INTERVAL) {
@@ -52,6 +59,7 @@ void ensureConnectivity() {
   } else {
     if (!mqtt.connected()) {
       if (millis() - lastMqttAttempt > MQTT_RECONNECT_INTERVAL) {
+        Serial.println("ensure connectivity mqtt");
         lastMqttAttempt = millis();
         if (mqtt.connect(bakery_id)) {
           mqtt.subscribe(topic_bread_time.c_str());
@@ -67,6 +75,7 @@ void ensureConnectivity() {
       mqtt.loop();
     }
   }
+
 }
 
 String sendHttpRequest(const String& url, const char* method, const String& body, uint16_t timeoutMs) {
@@ -74,8 +83,7 @@ String sendHttpRequest(const String& url, const char* method, const String& body
 
   HTTPClient http;
   http.begin(url);
-  http.addHeader("Authorization", "Bearer " + String(token));
-  http.addHeader("Content-Type", "application/json");
+  http.addHeader("authorization", "Bearer " + String(token));
   http.addHeader("Connection", "keep-alive");
   http.setTimeout(timeoutMs);
 
@@ -89,7 +97,7 @@ String sendHttpRequest(const String& url, const char* method, const String& body
     payload = http.getString();
   } else {
     payload = String();
-    Serial.println("HTTP request failed with code: " + String(code));
+    Serial.println("HTTP request failed with code: " + String(code) + String(url) + payload);
   }
 
   http.end();
