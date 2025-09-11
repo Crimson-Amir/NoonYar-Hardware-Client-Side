@@ -93,16 +93,16 @@ NextTicketResponse apiNextTicket(int customer_ticket_id) {
   String body; serializeJson(bodyDoc, body);
 
   String resp = sendHttpRequest((String(endpoint_addres) + "/nt"), "PUT", body);
-  if (resp.isEmpty()) {
-    mqttPublishError("nt:http_fail");
+  if (resp.isEmpty()) { 
+    mqttPublishError(String("api:apiNextTicket:failed: response is empty!")); 
     r.error = "http_fail"; 
-    return r;
+    return r; 
   }
 
   StaticJsonDocument<768> doc;
   DeserializationError err = deserializeJson(doc, resp);
-  if (err) {
-    mqttPublishError(String("nt:json_err:") + err.c_str());
+  if (err) { 
+    mqttPublishError(String("api:apiNextTicket:error:") + err.c_str()); 
     r.error = "json_error";
     return r;
   }
@@ -126,19 +126,20 @@ CurrentTicketResponse apiCurrentTicket() {
   CurrentTicketResponse r;
 
   String resp = sendHttpRequest((String(endpoint_addres) + "/ct") + bakery_id, "GET");
-  if (resp.isEmpty()) {
-    mqttPublishError("ct:http_fail");
+  if (resp.isEmpty()) { 
+    mqttPublishError(String("api:apiCurrentTicket:failed: response is empty!")); 
     r.error = "http_fail"; 
-    return r;
+    return r; 
   }
 
   StaticJsonDocument<768> doc;
   DeserializationError err = deserializeJson(doc, resp);
-  if (err) {
-    mqttPublishError(String("ct:json_err:") + err.c_str());
+  if (err) { 
+    mqttPublishError(String("api:apiCurrentTicket:error:") + err.c_str()); 
     r.error = "json_error";
     return r;
   }
+
   r.current_ticket_id = doc["current_ticket_id"] | -1;
   if (doc.containsKey("current_user_detail") && doc["current_user_detail"].is<JsonObject>()) {
     JsonObject detail = doc["current_user_detail"].as<JsonObject>();
@@ -161,5 +162,10 @@ bool apiSkipTicket(int customer_ticket_id) {
   String body; serializeJson(bodyDoc, body);
 
   String resp = sendHttpRequest((String(endpoint_addres) + "/st"), "PUT", body);
-  return !resp.isEmpty();
+  if (resp.isEmpty()) { 
+    mqttPublishError(String("api:apiSkipTicket:failed: response is empty!"));  
+    return false; 
+  }
+
+  return true;
 }
