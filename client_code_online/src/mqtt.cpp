@@ -87,7 +87,7 @@ void mqttPublisherTask(void* param) {
         }
       }
     }
-    vTaskDelay(50 / portTICK_PERIOD_MS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
   }
 }
 

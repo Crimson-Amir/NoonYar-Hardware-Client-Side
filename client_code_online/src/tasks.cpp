@@ -1,17 +1,20 @@
+#include "config.h"
 #include "tasks.h"
 #include "api.h"
 #include "mqtt.h"
 #include "mutex.h"
 #include "display.h"
 #include "network.h"
-#include "config.h"
 
 void fetchInitTask(void* param) {
-    
+    while (WiFi.status() != WL_CONNECTED) {
+      vTaskDelay(5000 / portTICK_PERIOD_MS);
+    }
+
     init_success = false;
     setStatus(STATUS_API_WAITING);
     while (!fetchInitData()) {
-        mqttPublishError("init_retrying");
+        mqttPublishError("tasks:fetchInitTask failed. retrying ...");
         vTaskDelay(INIT_RETRY_DELAY / portTICK_PERIOD_MS);
     }
     setStatus(STATUS_NORMAL);
@@ -24,12 +27,10 @@ void newCustomerTask(void* param) {
   delete (int*)param;
 
   if (!isNetworkReadyForApi()) {
-    mqttPublishError("nc:network_not_ready");
     vTaskDelete(NULL);
   }
 
   if (!tryLockBusy()) {
-    mqttPublishError("busy:new_customer");
     vTaskDelete(NULL);
   }
 
@@ -50,7 +51,6 @@ void nextTicketTask(void* param) {
   delete (int*)param;
 
   if (!isNetworkReadyForApi()) {
-    mqttPublishError("nt:network_not_ready");
     vTaskDelete(NULL);
   }
 
@@ -117,50 +117,54 @@ void ticketFlowTask(void* param) {
   const unsigned long checkInterval = 300000UL; // 5 minutes
 
   while (true) {
+    if (init_success && isNetworkReadyForApi()) {
 
-    unsigned long now = millis();
-    Serial.println("ESP32 started!");
-    mqttPublishError("hello");
-    if (!hasCustomerInQueue && (now - lastCheckTime < checkInterval)) {
-      vTaskDelay(5000 / portTICK_PERIOD_MS);
-      continue;
-    }
-
-    CurrentTicketResponse cur = apiCurrentTicket();
-    lastCheckTime = now;
-
-    if (!cur.error.isEmpty() || cur.current_ticket_id < 0) {
-      hasCustomerInQueue = false; // still none in queue
-      vTaskDelay(5000 / portTICK_PERIOD_MS);
-      continue;
-    }
-
-    hasCustomerInQueue = true;
-    int ticketId = cur.current_ticket_id;
-    //announceTicket(ticketId);
-
-    // 2. Cook time (seconds)
-    int cookTimeSeconds = calculateCookTime(cur);
-    //announceNextTicketReadyIn(cookTimeSeconds);
-    unsigned long deadline = millis() + (cookTimeSeconds * 1000UL);
-
-    // 3. Wait for scan or timeout
-    bool processed = false;
-    while (!processed) {
-      if (ticketScannedId == ticketId) {
-        ticketScannedId = -1;
-        NextTicketResponse resp = apiNextTicket(ticketId);
-        //showBreadsOnDisplay(resp);
-        vTaskDelay(60000 / portTICK_PERIOD_MS); // +1 minute wait
-        processed = true;
+      unsigned long now = millis();
+      if (!hasCustomerInQueue && (now - lastCheckTime < checkInterval)) {
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        continue;
       }
 
-      if (millis() >= deadline) {
-        apiSkipTicket(ticketId);
-        processed = true;
+      CurrentTicketResponse cur = apiCurrentTicket();
+      lastCheckTime = now;
+
+      if (!cur.error.isEmpty() || cur.current_ticket_id < 0) {
+        hasCustomerInQueue = false; // still none in queue
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        continue;
       }
 
-      vTaskDelay(1000 / portTICK_PERIOD_MS);
+      hasCustomerInQueue = true;
+      int ticketId = cur.current_ticket_id;
+      //announceTicket(ticketId);
+
+      // 2. Cook time (seconds)
+      int cookTimeSeconds = calculateCookTime(cur);
+      //announceNextTicketReadyIn(cookTimeSeconds);
+      unsigned long deadline = millis() + (cookTimeSeconds * 1000UL);
+
+      // 3. Wait for scan or timeout
+      bool processed = false;
+
+      while (!processed) {
+        if (ticketScannedId == ticketId) {
+          ticketScannedId = -1;
+          NextTicketResponse resp = apiNextTicket(ticketId);
+          //showBreadsOnDisplay(resp);
+          vTaskDelay(60000 / portTICK_PERIOD_MS); // +1 minute wait
+          processed = true;
+        }
+
+        if (millis() >= deadline) {
+          apiSkipTicket(ticketId);
+          processed = true;
+        }
+
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+      } 
+    } else {
+        Serial.println("Waiting for init/network...");
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
     }
   }
 }

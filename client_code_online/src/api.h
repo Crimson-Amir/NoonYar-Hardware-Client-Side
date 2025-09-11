@@ -11,6 +11,7 @@ extern int data_count;
 extern int bread_buffer[MAX_KEYS];
 extern int bread_buffer_count;
 extern volatile bool init_success;
+extern const char* endpoint_address;
 
 // ---------- API FUNCTIONS ----------
 bool fetchInitData();

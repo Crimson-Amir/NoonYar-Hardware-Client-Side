@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 
 // ---------- GLOBAL DATA ----------
+
 Preferences prefs;
 int breads_id[MAX_KEYS];
 int bread_cook_time[MAX_KEYS];
@@ -12,6 +13,7 @@ int data_count = 0;
 int bread_buffer[MAX_KEYS];
 int bread_buffer_count = 0;
 volatile bool init_success = false;
+const char* endpoint_address = "http://cos.voidtrek.com:80/hc"
 
 void saveInitDataToFlash() {
   if (!prefs.begin("bakery_data", false)) return;
@@ -27,15 +29,9 @@ void saveInitDataToFlash() {
 }
 
 bool fetchInitData() {
-  while (WiFi.status() != WL_CONNECTED) {
-    mqttPublishError("init:no_wifi");
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-  }
-
-  String url = String("http://cos.voidtrek.com:80/hc/hardware_init?bakery_id=") + bakery_id;
 
   for (int tries = 0; tries < MAX_HTTP_RETRIES; tries++) {
-    String resp = sendHttpRequest(url, "GET", "", INIT_HTTP_TIMEOUT);
+    String resp = sendHttpRequest((String(endpoint_addres) + "/hardware_init?bakery_id=" + bakery_id), "GET", "", INIT_HTTP_TIMEOUT);
     if (resp.isEmpty()) {
       vTaskDelay(HTTP_RETRY_DELAY / portTICK_PERIOD_MS);
       continue;
@@ -72,22 +68,17 @@ int apiNewCustomer(const std::vector<int>& breads) {
   }
   String body; serializeJson(bodyDoc, body);
 
-  String resp = sendHttpRequest("http://94.228.165.251:8000/hc/new_customer", "POST", body);
-  if (resp.isEmpty()) {
-    mqttPublishError("nc:http_fail");
-    return -1;
+  String resp = sendHttpRequest((String(endpoint_addres) + "/nc"), "POST", body);
+  if (resp.isEmpty()) { 
+    mqttPublishError(String("api:apiNewCustomer:failed: response is empty!")); 
+    return -1; 
   }
 
   StaticJsonDocument<256> doc;
   DeserializationError err = deserializeJson(doc, resp);
   if (err) { 
-    mqttPublishError(String("nc:json_err:") + err.c_str()); 
+    mqttPublishError(String("api:apiNewCustomer:error: ") + err.c_str()); 
     return -1; 
-  }
-
-  if (!doc.containsKey("customer_id")) {
-    mqttPublishError("no_customer_id_in_resp");
-    return -1;
   }
 
   return doc["customer_id"].as<int>();
@@ -101,7 +92,7 @@ NextTicketResponse apiNextTicket(int customer_ticket_id) {
   bodyDoc["customer_ticket_id"] = customer_ticket_id;
   String body; serializeJson(bodyDoc, body);
 
-  String resp = sendHttpRequest("http://94.228.165.251:8000/hc/nt", "PUT", body);
+  String resp = sendHttpRequest((String(endpoint_addres) + "/nt"), "PUT", body);
   if (resp.isEmpty()) {
     mqttPublishError("nt:http_fail");
     r.error = "http_fail"; 
@@ -134,7 +125,7 @@ NextTicketResponse apiNextTicket(int customer_ticket_id) {
 CurrentTicketResponse apiCurrentTicket() {
   CurrentTicketResponse r;
 
-  String resp = sendHttpRequest(String("http://94.228.165.251:8000/hc/ct/") + bakery_id, "GET");
+  String resp = sendHttpRequest((String(endpoint_addres) + "/ct") + bakery_id, "GET");
   if (resp.isEmpty()) {
     mqttPublishError("ct:http_fail");
     r.error = "http_fail"; 
@@ -169,6 +160,6 @@ bool apiSkipTicket(int customer_ticket_id) {
   bodyDoc["customer_ticket_id"] = customer_ticket_id;
   String body; serializeJson(bodyDoc, body);
 
-  String resp = sendHttpRequest("http://94.228.165.251:8000/hc/ct/st", "PUT", body);
+  String resp = sendHttpRequest((String(endpoint_addres) + "/st"), "PUT", body);
   return !resp.isEmpty();
 }

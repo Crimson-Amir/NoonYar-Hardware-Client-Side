@@ -5,7 +5,7 @@
 // ---------- GLOBAL NETWORK OBJECTS ----------
 WiFiClient net;
 PubSubClient mqtt(net);
-String topic_errors = String("bakery/") + bakery_id + "/errors";
+String topic_errors = String("bakery/") + bakery_id + "/error";
 String topic_bread_time = String("bakery/") + bakery_id + "/bread_time_update";
 
 // ---------- NETWORK STATE MANAGEMENT ----------
@@ -97,7 +97,7 @@ String sendHttpRequest(const String& url, const char* method, const String& body
     payload = http.getString();
   } else {
     payload = String();
-    Serial.println("HTTP request failed with code: " + String(code) + String(url) + payload);
+    mqttPublishError("network:sendHttpRequest failed with code: " + String(code) + "| URL: " + String(url) + "Body: " + String(body));
   }
 
   http.end();

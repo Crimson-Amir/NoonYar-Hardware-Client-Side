@@ -22,7 +22,6 @@ extern const char* mqtt_server;
 extern const int   mqtt_port;
 extern bool hasCustomerInQueue;
 extern volatile int ticketScannedId;
-
 extern unsigned long lastConnectivityCheck;
 
 // ---------- TIMING CONFIG ----------
@@ -35,6 +34,6 @@ extern unsigned long lastConnectivityCheck;
 #define INIT_HTTP_TIMEOUT        7000
 #define INIT_RETRY_DELAY         5000
 #define HTTP_RETRY_DELAY         2000
-#define CONNECTIVITY_CHECK_INTERVAL 1000
+#define CONNECTIVITY_CHECK_INTERVAL 2000
 
 #endif
