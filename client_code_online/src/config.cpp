@@ -12,5 +12,6 @@ const int   mqtt_port   = 1883;
 bool hasCustomerInQueue = true;
 volatile int ticketScannedId = -1;
 
+unsigned long bakery_timeout_ms = 0;
 unsigned long lastConnectivityCheck = 0;
 

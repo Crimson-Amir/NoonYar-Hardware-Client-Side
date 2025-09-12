@@ -70,7 +70,6 @@ void nextTicketTask(void* param) {
 
 void currentTicketTask(void* param) {
   if (!isNetworkReadyForApi()) {
-    mqttPublishError("ct:network_not_ready");
     vTaskDelete(NULL);
   }
 
@@ -86,12 +85,11 @@ void skipTicketTask(void* param) {
   delete (int*)param;
 
   if (!isNetworkReadyForApi()) {
-    mqttPublishError("st:network_not_ready");
     vTaskDelete(NULL);
   }
 
   bool ok = apiSkipTicket(ticketId);
-  if (!ok) mqttPublishError("st:failed");
+  if (!ok) mqttPublishError("tasks:skipTicketTask:failed");
 
   vTaskDelete(NULL);
 }
@@ -126,10 +124,11 @@ void ticketFlowTask(void* param) {
       }
 
       CurrentTicketResponse cur = apiCurrentTicket();
+      Serial.println(String(cur.current_ticket_id));
       lastCheckTime = now;
 
       if (!cur.error.isEmpty() || cur.current_ticket_id < 0) {
-        hasCustomerInQueue = false; // still none in queue
+        hasCustomerInQueue = false;
         vTaskDelay(5000 / portTICK_PERIOD_MS);
         continue;
       }
@@ -141,12 +140,14 @@ void ticketFlowTask(void* param) {
       // 2. Cook time (seconds)
       int cookTimeSeconds = calculateCookTime(cur);
       //announceNextTicketReadyIn(cookTimeSeconds);
-      unsigned long deadline = millis() + (cookTimeSeconds * 1000UL);
-
+      Serial.println(String(cookTimeSeconds));
+      unsigned long deadline = millis() + (cookTimeSeconds * 1000UL) + bakery_timeout_ms;
+      Serial.println(String(deadline));
       // 3. Wait for scan or timeout
       bool processed = false;
 
       while (!processed) {
+        Serial.println("proccess checking...");
         if (ticketScannedId == ticketId) {
           ticketScannedId = -1;
           NextTicketResponse resp = apiNextTicket(ticketId);
@@ -156,7 +157,15 @@ void ticketFlowTask(void* param) {
         }
 
         if (millis() >= deadline) {
-          apiSkipTicket(ticketId);
+          Serial.println("deadline finished");
+          int* ticketParam = new int(ticketId);
+
+          if (xTaskCreate(skipTicketTask, "skipTicketTask", 4096, ticketParam, 1, NULL) != pdPASS) 
+          {
+            mqttPublishError("tasks:ticketFlowTask:skipTicketTask:failed");
+            delete ticketParam;
+          }
+
           processed = true;
         }
 

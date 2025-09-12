@@ -13,7 +13,7 @@ int data_count = 0;
 int bread_buffer[MAX_KEYS];
 int bread_buffer_count = 0;
 volatile bool init_success = false;
-const char* endpoint_address = "http://cos.voidtrek.com:80/hc"
+const char* endpoint_address = "http://cos.voidtrek.com:80/hc";
 
 void saveInitDataToFlash() {
   if (!prefs.begin("bakery_data", false)) return;
@@ -30,33 +30,30 @@ void saveInitDataToFlash() {
 
 bool fetchInitData() {
 
-  for (int tries = 0; tries < MAX_HTTP_RETRIES; tries++) {
-    String resp = sendHttpRequest((String(endpoint_addres) + "/hardware_init?bakery_id=" + bakery_id), "GET", "", INIT_HTTP_TIMEOUT);
-    if (resp.isEmpty()) {
-      vTaskDelay(HTTP_RETRY_DELAY / portTICK_PERIOD_MS);
-      continue;
-    }
-
-    StaticJsonDocument<768> doc;
-    if (deserializeJson(doc, resp)) {
-      mqttPublishError("json_err:init");
-      return false;
-    }
-
-    data_count = 0;
-    for (JsonPair kv : doc.as<JsonObject>()) {
-      if (data_count >= MAX_KEYS) break;
-      breads_id[data_count] = String(kv.key().c_str()).toInt();
-      bread_cook_time[data_count] = kv.value().as<int>();
-      data_count++;
-    }
-
-    saveInitDataToFlash();
-    return true;
+  String resp = sendHttpRequest((String(endpoint_address) + "/hardware_init?bakery_id=" + bakery_id), "GET", "", INIT_HTTP_TIMEOUT);
+  if (resp.isEmpty()) {
+    mqttPublishError("api:fetchInitData:failed: response is empty!");
+    return false;
   }
 
-  mqttPublishError("init_fetch_failed");
-  return false;
+  StaticJsonDocument<768> doc;
+  DeserializationError err = deserializeJson(doc, resp);
+  if (err) { 
+    mqttPublishError(String("api:fetchInitData:error: ") + err.c_str()); 
+    return false; 
+  }
+
+  data_count = 0;
+  for (JsonPair kv : doc.as<JsonObject>()) {
+    if (data_count >= MAX_KEYS) break;
+    breads_id[data_count] = String(kv.key().c_str()).toInt();
+    bread_cook_time[data_count] = kv.value().as<int>();
+    data_count++;
+  }
+
+  saveInitDataToFlash();
+  return true;
+
 }
 
 int apiNewCustomer(const std::vector<int>& breads) {
@@ -68,7 +65,7 @@ int apiNewCustomer(const std::vector<int>& breads) {
   }
   String body; serializeJson(bodyDoc, body);
 
-  String resp = sendHttpRequest((String(endpoint_addres) + "/nc"), "POST", body);
+  String resp = sendHttpRequest((String(endpoint_address) + "/nc"), "POST", body);
   if (resp.isEmpty()) { 
     mqttPublishError(String("api:apiNewCustomer:failed: response is empty!")); 
     return -1; 
@@ -92,7 +89,7 @@ NextTicketResponse apiNextTicket(int customer_ticket_id) {
   bodyDoc["customer_ticket_id"] = customer_ticket_id;
   String body; serializeJson(bodyDoc, body);
 
-  String resp = sendHttpRequest((String(endpoint_addres) + "/nt"), "PUT", body);
+  String resp = sendHttpRequest((String(endpoint_address) + "/nt"), "PUT", body);
   if (resp.isEmpty()) { 
     mqttPublishError(String("api:apiNextTicket:failed: response is empty!")); 
     r.error = "http_fail"; 
@@ -125,18 +122,24 @@ NextTicketResponse apiNextTicket(int customer_ticket_id) {
 CurrentTicketResponse apiCurrentTicket() {
   CurrentTicketResponse r;
 
-  String resp = sendHttpRequest((String(endpoint_addres) + "/ct") + bakery_id, "GET");
-  if (resp.isEmpty()) { 
+  String resp = sendHttpRequest((String(endpoint_address) + "/ct/" + bakery_id), "GET");
+  if (resp.isEmpty()) {
     mqttPublishError(String("api:apiCurrentTicket:failed: response is empty!")); 
-    r.error = "http_fail"; 
-    return r; 
+    r.error = "http_fail";
+    return r;
   }
 
   StaticJsonDocument<768> doc;
   DeserializationError err = deserializeJson(doc, resp);
-  if (err) { 
+  if (err) {
     mqttPublishError(String("api:apiCurrentTicket:error:") + err.c_str()); 
     r.error = "json_error";
+    return r;
+  }
+
+  int status_code = doc["status_code"] | -1;
+  if (status_code == 3) {
+    r.error = "empty_queue";
     return r;
   }
 
@@ -161,7 +164,7 @@ bool apiSkipTicket(int customer_ticket_id) {
   bodyDoc["customer_ticket_id"] = customer_ticket_id;
   String body; serializeJson(bodyDoc, body);
 
-  String resp = sendHttpRequest((String(endpoint_addres) + "/st"), "PUT", body);
+  String resp = sendHttpRequest((String(endpoint_address) + "/st"), "PUT", body);
   if (resp.isEmpty()) { 
     mqttPublishError(String("api:apiSkipTicket:failed: response is empty!"));  
     return false; 

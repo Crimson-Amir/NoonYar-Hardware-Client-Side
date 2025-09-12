@@ -48,7 +48,7 @@ void ensureConnectivity() {
   lastConnectivityCheck = millis();
 
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("ensure connectivity wifi");
+    Serial.println("trying to connect to wifi...");
     setStatus(STATUS_WIFI_ERROR);
     setNetworkBlock(true);
     if (millis() - lastWifiAttempt > WIFI_RECONNECT_INTERVAL) {
@@ -59,7 +59,7 @@ void ensureConnectivity() {
   } else {
     if (!mqtt.connected()) {
       if (millis() - lastMqttAttempt > MQTT_RECONNECT_INTERVAL) {
-        Serial.println("ensure connectivity mqtt");
+        Serial.println("trying to connect to mqtt server...");
         lastMqttAttempt = millis();
         if (mqtt.connect(bakery_id)) {
           mqtt.subscribe(topic_bread_time.c_str());
@@ -97,7 +97,7 @@ String sendHttpRequest(const String& url, const char* method, const String& body
     payload = http.getString();
   } else {
     payload = String();
-    mqttPublishError("network:sendHttpRequest failed with code: " + String(code) + "| URL: " + String(url) + "Body: " + String(body));
+    mqttPublishError("network:sendHttpRequest:failed with status code: " + String(code) + " | URL: " + String(url) + " | Body: " + String(body));
   }
 
   http.end();

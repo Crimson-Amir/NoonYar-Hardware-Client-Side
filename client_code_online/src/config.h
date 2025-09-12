@@ -23,6 +23,7 @@ extern const int   mqtt_port;
 extern bool hasCustomerInQueue;
 extern volatile int ticketScannedId;
 extern unsigned long lastConnectivityCheck;
+extern unsigned long bakery_timeout_ms;
 
 // ---------- TIMING CONFIG ----------
 #define WIFI_RECONNECT_INTERVAL  5000
