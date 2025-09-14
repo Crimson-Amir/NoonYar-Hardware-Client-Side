@@ -181,3 +181,33 @@ void ticketFlowTask(void* param) {
     }
   }
 }
+
+void scannerTask(void *pvParameters) {
+    while (1) {
+        if (Serial.available()) {
+            String qr = Serial.readStringUntil('\n');  // read scanned QR line
+            int pos = qr.indexOf("t=");
+            if (pos != -1) {
+                int ticket_id = qr.substring(pos + 2).toInt();
+
+                Serial.print("Scanned Ticket ID: ");
+                Serial.println(ticket_id);
+
+                // Call API
+                NextTicketResponse resp = apiNextTicket(ticket_id);
+
+                if (!resp.error.isEmpty()) {
+                    if (resp.error == "invalid_ticket_number") {
+                        // showError();
+                    } else {
+                        mqttPublishError("scanner:apiNextTicket failed: " + resp.error);
+                    }
+                } else {
+                    // success
+                    // showNumberOnDisplay(resp.current_ticket_id);
+                }
+            }
+        }
+        vTaskDelay(10 / portTICK_PERIOD_MS);  // yield to other tasks
+    }
+}

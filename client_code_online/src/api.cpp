@@ -90,6 +90,12 @@ NextTicketResponse apiNextTicket(int customer_ticket_id) {
   String body; serializeJson(bodyDoc, body);
 
   String resp = sendHttpRequest((String(endpoint_address) + "/nt"), "PUT", body);
+
+  if (resp.status_code == 400) {
+    result.error = "invalid_ticket_number";
+    return r;
+  }
+
   if (resp.body.isEmpty()) {
     mqttPublishError("api:apiNextTicket:failed: empty body (code=" + String(resp.status_code) + ")");
     r.error = "http_fail";

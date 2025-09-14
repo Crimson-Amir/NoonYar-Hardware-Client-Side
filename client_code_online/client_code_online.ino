@@ -37,6 +37,7 @@ void setup() {
   xTaskCreatePinnedToCore(mqttPublisherTask, "MqttPublisher", 4096, NULL, 2, NULL, 0);
   xTaskCreatePinnedToCore(fetchInitTask, "InitFetchBoot", 4096, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(ticketFlowTask, "TicketFlow", 8192, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(scannerTask, "ScannerTask", 4096, NULL, 1, NULL, 1);
 
   showNumbers(num1, num2, num3);
 }
