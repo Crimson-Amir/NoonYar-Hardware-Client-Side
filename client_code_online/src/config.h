@@ -21,7 +21,9 @@ extern const char* token;
 extern const char* mqtt_server;
 extern const int   mqtt_port;
 extern bool hasCustomerInQueue;
-extern volatile int ticketScannedId;
+extern bool readyToScan;
+extern bool exitWaitTimeout;
+extern volatile int currentTicketID;
 extern unsigned long lastConnectivityCheck;
 extern unsigned long bakery_timeout_ms;
 
@@ -36,5 +38,6 @@ extern unsigned long bakery_timeout_ms;
 #define INIT_RETRY_DELAY         5000
 #define HTTP_RETRY_DELAY         2000
 #define CONNECTIVITY_CHECK_INTERVAL 2000
+#define TIME_FOR_RECEIVE_BREAD_MS 60000
 
 #endif

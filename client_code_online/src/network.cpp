@@ -78,8 +78,10 @@ void ensureConnectivity() {
 
 }
 
-String sendHttpRequest(const String& url, const char* method, const String& body, uint16_t timeoutMs) {
-  if (WiFi.status() != WL_CONNECTED) return String();
+HttpResponse sendHttpRequest(const String& url, const char* method, const String& body, uint16_t timeoutMs) {
+  HttpResponse resp = {-1, ""};
+
+  if (WiFi.status() != WL_CONNECTED) return resp;
 
   HTTPClient http;
   http.begin(url);
@@ -92,14 +94,14 @@ String sendHttpRequest(const String& url, const char* method, const String& body
   else if (!strcmp(method, "POST")) code = http.POST(body);
   else if (!strcmp(method, "PUT"))  code = http.PUT(body);
 
-  String payload;
-  if (code > 0 && (code >= 200 && code < 300)) {
-    payload = http.getString();
+  resp.status_code = code;
+
+  if (code > 0 && code < 500) {
+    resp.body = http.getString();
   } else {
-    payload = String();
-    mqttPublishError("network:sendHttpRequest:failed with status code: " + String(code) + " | URL: " + String(url) + " | Body: " + String(body));
+    mqttPublishError("network:sendHttpRequest:failed with status code: " + String(code) + " | URL: " + String(url));
   }
 
   http.end();
-  return payload;
+  return resp;
 }

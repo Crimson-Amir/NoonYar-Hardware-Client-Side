@@ -39,4 +39,9 @@ struct CurrentTicketResponse {
   String error;
 };
 
+struct HttpResponse {
+  int status_code;
+  String body;
+};
+
 #endif

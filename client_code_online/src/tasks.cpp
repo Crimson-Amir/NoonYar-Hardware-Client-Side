@@ -112,14 +112,14 @@ int calculateCookTime(const CurrentTicketResponse& cur) {
 void ticketFlowTask(void* param) {
   
   unsigned long lastCheckTime = 0;
-  const unsigned long checkInterval = 300000UL; // 5 minutes
+  const unsigned long checkInterval = 300000UL;
 
   while (true) {
     if (init_success && isNetworkReadyForApi()) {
 
       unsigned long now = millis();
       if (!hasCustomerInQueue && (now - lastCheckTime < checkInterval)) {
-        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        vTaskDelay(10000 / portTICK_PERIOD_MS);
         continue;
       }
 
@@ -134,31 +134,35 @@ void ticketFlowTask(void* param) {
       }
 
       hasCustomerInQueue = true;
-      int ticketId = cur.current_ticket_id;
-      //announceTicket(ticketId);
-
-      // 2. Cook time (seconds)
+      readyToScan = false;
+      currentTicketID = cur.current_ticket_id;
       int cookTimeSeconds = calculateCookTime(cur);
-      //announceNextTicketReadyIn(cookTimeSeconds);
+      
+      // TODO: VOICE: NEXT TICKET IN cookTimeSeconds SECOND 
+
       Serial.println(String(cookTimeSeconds));
-      unsigned long deadline = millis() + (cookTimeSeconds * 1000UL) + bakery_timeout_ms;
-      Serial.println(String(deadline));
-      // 3. Wait for scan or timeout
+      unsigned long waitDeadline = millis() + (cookTimeSeconds * 1000UL) + bakery_timeout_ms;
+      bakery_timeout_ms = 0;
+      
+      exitWaitTimeout = false;
+      while (!exitWaitTimeout) {
+        if (millis() >= waitDeadline) {
+          exitWaitTimeout = true;
+          Serial.println("Initial wait period finished.");
+        }
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+      }
+
+      // TODO: VOICE: TICKET NUMBER XXX
+      unsigned long timeForReceiveBread = millis() + TIME_FOR_RECEIVE_BREAD_MS;
       bool processed = false;
+      readyToScan = true;
 
       while (!processed) {
-        Serial.println("proccess checking...");
-        if (ticketScannedId == ticketId) {
-          ticketScannedId = -1;
-          NextTicketResponse resp = apiNextTicket(ticketId);
-          //showBreadsOnDisplay(resp);
-          vTaskDelay(60000 / portTICK_PERIOD_MS); // +1 minute wait
-          processed = true;
-        }
 
-        if (millis() >= deadline) {
+        if (millis() >= timeForReceiveBread) {
           Serial.println("deadline finished");
-          int* ticketParam = new int(ticketId);
+          int* ticketParam = new int(currentTicketID);
 
           if (xTaskCreate(skipTicketTask, "skipTicketTask", 4096, ticketParam, 1, NULL) != pdPASS) 
           {

@@ -31,13 +31,13 @@ void saveInitDataToFlash() {
 bool fetchInitData() {
 
   String resp = sendHttpRequest((String(endpoint_address) + "/hardware_init?bakery_id=" + bakery_id), "GET", "", INIT_HTTP_TIMEOUT);
-  if (resp.isEmpty()) {
-    mqttPublishError("api:fetchInitData:failed: response is empty!");
+  if (resp.body.isEmpty()) {
+    mqttPublishError("api:fetchInitData:failed: empty body (code=" + String(resp.status_code) + ")");
     return false;
   }
 
   StaticJsonDocument<768> doc;
-  DeserializationError err = deserializeJson(doc, resp);
+  DeserializationError err = deserializeJson(doc, resp.body);
   if (err) { 
     mqttPublishError(String("api:fetchInitData:error: ") + err.c_str()); 
     return false; 
@@ -66,13 +66,13 @@ int apiNewCustomer(const std::vector<int>& breads) {
   String body; serializeJson(bodyDoc, body);
 
   String resp = sendHttpRequest((String(endpoint_address) + "/nc"), "POST", body);
-  if (resp.isEmpty()) { 
-    mqttPublishError(String("api:apiNewCustomer:failed: response is empty!")); 
-    return -1; 
+  if (resp.body.isEmpty()) {
+    mqttPublishError("api:apiNewCustomer:failed: empty body (code=" + String(resp.status_code) + ")");
+    return -1;
   }
 
   StaticJsonDocument<256> doc;
-  DeserializationError err = deserializeJson(doc, resp);
+  DeserializationError err = deserializeJson(doc, resp.body);
   if (err) { 
     mqttPublishError(String("api:apiNewCustomer:error: ") + err.c_str()); 
     return -1; 
@@ -90,14 +90,14 @@ NextTicketResponse apiNextTicket(int customer_ticket_id) {
   String body; serializeJson(bodyDoc, body);
 
   String resp = sendHttpRequest((String(endpoint_address) + "/nt"), "PUT", body);
-  if (resp.isEmpty()) { 
-    mqttPublishError(String("api:apiNextTicket:failed: response is empty!")); 
-    r.error = "http_fail"; 
-    return r; 
+  if (resp.body.isEmpty()) {
+    mqttPublishError("api:apiNextTicket:failed: empty body (code=" + String(resp.status_code) + ")");
+    r.error = "http_fail";
+    return r;
   }
 
   StaticJsonDocument<768> doc;
-  DeserializationError err = deserializeJson(doc, resp);
+  DeserializationError err = deserializeJson(doc, resp.body);
   if (err) { 
     mqttPublishError(String("api:apiNextTicket:error:") + err.c_str()); 
     r.error = "json_error";
@@ -123,23 +123,23 @@ CurrentTicketResponse apiCurrentTicket() {
   CurrentTicketResponse r;
 
   String resp = sendHttpRequest((String(endpoint_address) + "/ct/" + bakery_id), "GET");
-  if (resp.isEmpty()) {
-    mqttPublishError(String("api:apiCurrentTicket:failed: response is empty!")); 
+  
+  if (resp.status_code == 404) {
+    result.error = "empty_queue";
+    return r;
+  }
+
+  if (resp.body.isEmpty()) {
+    mqttPublishError("api:apiCurrentTicket:failed: empty body (code=" + String(resp.status_code) + ")");
     r.error = "http_fail";
     return r;
   }
 
   StaticJsonDocument<768> doc;
-  DeserializationError err = deserializeJson(doc, resp);
+  DeserializationError err = deserializeJson(doc, resp.body);
   if (err) {
     mqttPublishError(String("api:apiCurrentTicket:error:") + err.c_str()); 
     r.error = "json_error";
-    return r;
-  }
-
-  int status_code = doc["status_code"] | -1;
-  if (status_code == 3) {
-    r.error = "empty_queue";
     return r;
   }
 
