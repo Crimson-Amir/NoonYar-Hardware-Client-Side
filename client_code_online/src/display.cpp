@@ -28,6 +28,7 @@ void showNumbers(int a, int b, int c) {
 
 void setStatus(DeviceStatus st) {
   currentStatus = st;
+  Serial.println("New Status: " + String(st));
   lc.clearDisplay(0);
 
   if (st == STATUS_NORMAL) {

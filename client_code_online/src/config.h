@@ -21,11 +21,19 @@ extern const char* token;
 extern const char* mqtt_server;
 extern const int   mqtt_port;
 extern bool hasCustomerInQueue;
+extern bool hasCustomerScanned;
 extern bool readyToScan;
 extern bool exitWaitTimeout;
 extern volatile int currentTicketID;
 extern unsigned long lastConnectivityCheck;
 extern unsigned long bakery_timeout_ms;
+
+extern int bread_count;
+extern int bread_buffer_count;
+extern int bread_buffer[MAX_KEYS];
+extern int breads_id[MAX_KEYS];
+extern int bread_cook_time[MAX_KEYS];
+
 
 // ---------- TIMING CONFIG ----------
 #define WIFI_RECONNECT_INTERVAL  5000

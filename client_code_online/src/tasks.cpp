@@ -23,9 +23,6 @@ void fetchInitTask(void* param) {
 }
 
 void newCustomerTask(void* param) {
-  int bread_count = *(int*)param;
-  delete (int*)param;
-
   if (!isNetworkReadyForApi()) {
     vTaskDelete(NULL);
   }
@@ -35,12 +32,12 @@ void newCustomerTask(void* param) {
   }
 
   setStatus(STATUS_API_WAITING);
-  
+
   std::vector<int> breads(bread_buffer, bread_buffer + bread_count);
   int cid = apiNewCustomer(breads);
-  
+
   setStatus(cid != -1 ? STATUS_NORMAL : STATUS_API_ERROR);
-  if (cid == -1) mqttPublishError("nc:failed");
+  if (cid == -1) mqttPublishError("tasks:newCustomerTask:failed");
   hasCustomerInQueue = true;
   unlockBusy();
   vTaskDelete(NULL);
@@ -99,7 +96,7 @@ int calculateCookTime(const CurrentTicketResponse& cur) {
   for (int i = 0; i < cur.bread_count; i++) {
     int breadId = cur.breads[i];
     int count   = cur.bread_counts[i];
-    for (int j = 0; j < data_count; j++) {
+    for (int j = 0; j < bread_count; j++) {
       if (breads_id[j] == breadId) {
         totalTime += count * bread_cook_time[j];
         break;
@@ -124,7 +121,7 @@ void ticketFlowTask(void* param) {
       }
 
       CurrentTicketResponse cur = apiCurrentTicket();
-      Serial.println(String(cur.current_ticket_id));
+      Serial.println(String("ticketFlowTask:current_ticket_id") + String(cur.current_ticket_id));
       lastCheckTime = now;
 
       if (!cur.error.isEmpty() || cur.current_ticket_id < 0) {
@@ -135,12 +132,13 @@ void ticketFlowTask(void* param) {
 
       hasCustomerInQueue = true;
       readyToScan = false;
+      hasCustomerScanned = false;
       currentTicketID = cur.current_ticket_id;
       int cookTimeSeconds = calculateCookTime(cur);
       
       // TODO: VOICE: NEXT TICKET IN cookTimeSeconds SECOND 
 
-      Serial.println(String(cookTimeSeconds));
+      Serial.println(String("ticketFlowTask:cookTimeSeconds") + String(cookTimeSeconds));
       unsigned long waitDeadline = millis() + (cookTimeSeconds * 1000UL) + bakery_timeout_ms;
       bakery_timeout_ms = 0;
       
@@ -162,14 +160,15 @@ void ticketFlowTask(void* param) {
 
         if (millis() >= timeForReceiveBread) {
           Serial.println("deadline finished");
-          int* ticketParam = new int(currentTicketID);
+          if (!hasCustomerScanned){
+            int* ticketParam = new int(currentTicketID);
 
-          if (xTaskCreate(skipTicketTask, "skipTicketTask", 4096, ticketParam, 1, NULL) != pdPASS) 
-          {
-            mqttPublishError("tasks:ticketFlowTask:skipTicketTask:failed");
-            delete ticketParam;
+            if (xTaskCreate(skipTicketTask, "skipTicketTask", 4096, ticketParam, 1, NULL) != pdPASS) 
+              {
+                mqttPublishError("tasks:ticketFlowTask:skipTicketTask:failed");
+                delete ticketParam;
+              }
           }
-
           processed = true;
         }
 
@@ -200,14 +199,15 @@ void scannerTask(void *pvParameters) {
                     if (resp.error == "invalid_ticket_number") {
                         // showError();
                     } else {
-                        mqttPublishError("scanner:apiNextTicket failed: " + resp.error);
+                        mqttPublishError("tasks:scannerTask:apiNextTicke reponse failed: " + resp.error);
                     }
                 } else {
                     // success
+                    hasCustomerScanned = true;
                     // showNumberOnDisplay(resp.current_ticket_id);
                 }
             }
         }
-        vTaskDelay(10 / portTICK_PERIOD_MS);  // yield to other tasks
+        vTaskDelay(500 / portTICK_PERIOD_MS);  // yield to other tasks
     }
 }

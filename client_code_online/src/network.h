@@ -26,6 +26,6 @@ bool isNetworkReady();
 void ensureConnectivity();
 
 // ---------- HTTP FUNCTIONS ----------
-String sendHttpRequest(const String& url, const char* method, const String& body = "", uint16_t timeoutMs = HTTP_TIMEOUT);
+HttpResponse sendHttpRequest(const String& url, const char* method, const String& body = "", uint16_t timeoutMs = HTTP_TIMEOUT);
 
 #endif

@@ -71,7 +71,9 @@ void ensureConnectivity() {
       }
     } else {
       setNetworkBlock(false);
+      if (currentStatus == STATUS_WIFI_ERROR || currentStatus == STATUS_MQTT_ERROR) {
       setStatus(STATUS_NORMAL);
+      }
       mqtt.loop();
     }
   }

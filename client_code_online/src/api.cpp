@@ -1,3 +1,4 @@
+#include "config.h"
 #include "api.h"
 #include "network.h"
 #include "mqtt.h"
@@ -7,19 +8,14 @@
 // ---------- GLOBAL DATA ----------
 
 Preferences prefs;
-int breads_id[MAX_KEYS];
-int bread_cook_time[MAX_KEYS];
-int data_count = 0;
-int bread_buffer[MAX_KEYS];
-int bread_buffer_count = 0;
 volatile bool init_success = false;
 const char* endpoint_address = "http://cos.voidtrek.com:80/hc";
 
 void saveInitDataToFlash() {
   if (!prefs.begin("bakery_data", false)) return;
-  prefs.putInt("cnt", data_count);
+  prefs.putInt("cnt", bread_count);
   char key[8];
-  for (int i = 0; i < data_count; i++) {
+  for (int i = 0; i < bread_count; i++) {
     snprintf(key, sizeof(key), "k%d", i);
     prefs.putInt(key, breads_id[i]);
     snprintf(key, sizeof(key), "v%d", i);
@@ -30,7 +26,7 @@ void saveInitDataToFlash() {
 
 bool fetchInitData() {
 
-  String resp = sendHttpRequest((String(endpoint_address) + "/hardware_init?bakery_id=" + bakery_id), "GET", "", INIT_HTTP_TIMEOUT);
+  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/hardware_init?bakery_id=" + bakery_id), "GET", "", INIT_HTTP_TIMEOUT);
   if (resp.body.isEmpty()) {
     mqttPublishError("api:fetchInitData:failed: empty body (code=" + String(resp.status_code) + ")");
     return false;
@@ -39,16 +35,16 @@ bool fetchInitData() {
   StaticJsonDocument<768> doc;
   DeserializationError err = deserializeJson(doc, resp.body);
   if (err) { 
-    mqttPublishError(String("api:fetchInitData:error: ") + err.c_str()); 
+    mqttPublishError(String("api:fetchInitData:error: ") + err.c_str() + String(" | Body: ") + String(resp.body)); 
     return false; 
   }
 
-  data_count = 0;
+  bread_count = 0;
   for (JsonPair kv : doc.as<JsonObject>()) {
-    if (data_count >= MAX_KEYS) break;
-    breads_id[data_count] = String(kv.key().c_str()).toInt();
-    bread_cook_time[data_count] = kv.value().as<int>();
-    data_count++;
+    if (bread_count >= MAX_KEYS) break;
+    breads_id[bread_count] = String(kv.key().c_str()).toInt();
+    bread_cook_time[bread_count] = kv.value().as<int>();
+    bread_count++;
   }
 
   saveInitDataToFlash();
@@ -60,12 +56,12 @@ int apiNewCustomer(const std::vector<int>& breads) {
   StaticJsonDocument<512> bodyDoc;
   bodyDoc["bakery_id"] = atoi(bakery_id);
   JsonObject req = bodyDoc.createNestedObject("bread_requirements");
-  for (int i = 0; i < data_count; ++i) {
+  for (int i = 0; i < bread_count; ++i) {
     req[String(breads_id[i])] = (i < (int)breads.size() ? breads[i] : 0);
   }
   String body; serializeJson(bodyDoc, body);
 
-  String resp = sendHttpRequest((String(endpoint_address) + "/nc"), "POST", body);
+  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/nc"), "PUT", body);
   if (resp.body.isEmpty()) {
     mqttPublishError("api:apiNewCustomer:failed: empty body (code=" + String(resp.status_code) + ")");
     return -1;
@@ -74,11 +70,16 @@ int apiNewCustomer(const std::vector<int>& breads) {
   StaticJsonDocument<256> doc;
   DeserializationError err = deserializeJson(doc, resp.body);
   if (err) { 
-    mqttPublishError(String("api:apiNewCustomer:error: ") + err.c_str()); 
+    mqttPublishError(String("api:apiNewCustomer:error: ") + err.c_str() + String(" | Body: ") + String(resp.body)); 
     return -1; 
   }
 
-  return doc["customer_id"].as<int>();
+  if (!doc.containsKey("customer_ticket_id")) {
+    mqttPublishError("api:apiNewCustomer:missing customer_id" + String(" | Body: ") + String(resp.body));
+    return -1;
+  }
+
+  return doc["customer_ticket_id"].as<int>();
 }
 
 NextTicketResponse apiNextTicket(int customer_ticket_id) {
@@ -89,10 +90,10 @@ NextTicketResponse apiNextTicket(int customer_ticket_id) {
   bodyDoc["customer_ticket_id"] = customer_ticket_id;
   String body; serializeJson(bodyDoc, body);
 
-  String resp = sendHttpRequest((String(endpoint_address) + "/nt"), "PUT", body);
+  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/nt"), "PUT", body);
 
   if (resp.status_code == 400) {
-    result.error = "invalid_ticket_number";
+    r.error = "invalid_ticket_number";
     return r;
   }
 
@@ -105,7 +106,7 @@ NextTicketResponse apiNextTicket(int customer_ticket_id) {
   StaticJsonDocument<768> doc;
   DeserializationError err = deserializeJson(doc, resp.body);
   if (err) { 
-    mqttPublishError(String("api:apiNextTicket:error:") + err.c_str()); 
+    mqttPublishError(String("api:apiNextTicket:error:") + err.c_str() + String(" | Body: ") + String(resp.body)); 
     r.error = "json_error";
     return r;
   }
@@ -128,10 +129,10 @@ NextTicketResponse apiNextTicket(int customer_ticket_id) {
 CurrentTicketResponse apiCurrentTicket() {
   CurrentTicketResponse r;
 
-  String resp = sendHttpRequest((String(endpoint_address) + "/ct/" + bakery_id), "GET");
+  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/ct/" + bakery_id), "GET");
   
   if (resp.status_code == 404) {
-    result.error = "empty_queue";
+    r.error = "empty_queue";
     return r;
   }
 
@@ -144,7 +145,7 @@ CurrentTicketResponse apiCurrentTicket() {
   StaticJsonDocument<768> doc;
   DeserializationError err = deserializeJson(doc, resp.body);
   if (err) {
-    mqttPublishError(String("api:apiCurrentTicket:error:") + err.c_str()); 
+    mqttPublishError(String("api:apiCurrentTicket:error:") + err.c_str() + String(" | Body: ") + String(resp.body)); 
     r.error = "json_error";
     return r;
   }
@@ -170,8 +171,8 @@ bool apiSkipTicket(int customer_ticket_id) {
   bodyDoc["customer_ticket_id"] = customer_ticket_id;
   String body; serializeJson(bodyDoc, body);
 
-  String resp = sendHttpRequest((String(endpoint_address) + "/st"), "PUT", body);
-  if (resp.isEmpty()) { 
+  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/st"), "PUT", body);
+  if (resp.body.isEmpty()) { 
     mqttPublishError(String("api:apiSkipTicket:failed: response is empty!"));  
     return false; 
   }

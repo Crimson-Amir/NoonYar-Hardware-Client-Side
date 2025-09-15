@@ -8,6 +8,7 @@
   #include "src/api.h"
   #include "src/tasks.h"
 
+#define BUTTON_PIN 34
 
 void setup() {
   // Filesystem
@@ -40,9 +41,30 @@ void setup() {
   xTaskCreatePinnedToCore(scannerTask, "ScannerTask", 4096, NULL, 1, NULL, 1);
 
   showNumbers(num1, num2, num3);
+
+  pinMode(BUTTON_PIN, INPUT);
 }
 
 void loop() {
   ensureConnectivity();
   checkDeadlock();
+
+  if (digitalRead(BUTTON_PIN) == HIGH) {
+    Serial.println("Button pressed! Adding new customer...");
+
+    // Example: update bread_buffer (here just fill with demo values)
+    bread_buffer[0] = 3;
+    bread_buffer[1] = 2;
+
+    // Start task (no param, since we use global bread_count)
+    xTaskCreate(
+      newCustomerTask,     // function
+      "NewCustomerTask",   // task name
+      4096,                // stack size
+      NULL,                // param (unused now)
+      1,                   // priority
+      NULL                 // task handle
+    );
+    delay(5000);
+    }
 }
