@@ -75,7 +75,7 @@ int apiNewCustomer(const std::vector<int>& breads) {
   }
 
   if (!doc.containsKey("customer_ticket_id")) {
-    mqttPublishError("api:apiNewCustomer:missing customer_id" + String(" | Body: ") + String(resp.body));
+    mqttPublishError("api:apiNewCustomer:missing customer_ticket_id" + String(" | Body: ") + String(resp.body));
     return -1;
   }
 
@@ -173,9 +173,32 @@ bool apiSkipTicket(int customer_ticket_id) {
 
   HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/st"), "PUT", body);
   if (resp.body.isEmpty()) { 
-    mqttPublishError(String("api:apiSkipTicket:failed: response is empty!"));  
+    mqttPublishError(String("api:apiSkipTicket:failed: empty body (code=" + String(resp.status_code) + ")"));  
     return false; 
   }
 
   return true;
+}
+
+bool isTicketInSkippedList(int customer_ticket_id) {
+  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/is_ticket_in_skipped_list/" + atoi(bakery_id) + "/" + customer_ticket_id), "GET");
+  if (resp.body.isEmpty()) { 
+    mqttPublishError(String("api:isTicketInSkippedList:failed: empty body (code=" + String(resp.status_code) + ")"));  
+    return false; 
+  }
+
+  StaticJsonDocument<768> doc;
+  DeserializationError err = deserializeJson(doc, resp.body);
+  if (err) {
+    mqttPublishError(String("api:isTicketInSkippedList:error:") + err.c_str() + String(" | Body: ") + String(resp.body)); 
+    return false;
+  }
+
+  if (!doc.containsKey("is_ticket_in_skipped_list")) {
+    mqttPublishError("api:isTicketInSkippedList:missing key | Body: " + String(resp.body));
+    return false;
+  }
+
+  return doc["is_ticket_in_skipped_list"].as<bool>();
+
 }

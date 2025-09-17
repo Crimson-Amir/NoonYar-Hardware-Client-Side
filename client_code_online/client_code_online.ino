@@ -13,7 +13,8 @@
 void setup() {
   // Filesystem
   Serial.begin(115200);
-  delay(1000);
+  Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
+  delay(3000);
   LittleFS.begin();
 
   // Display init
@@ -42,6 +43,7 @@ void setup() {
 
   showNumbers(num1, num2, num3);
 
+  pinMode(35, INPUT);
   pinMode(BUTTON_PIN, INPUT);
 }
 
@@ -53,7 +55,7 @@ void loop() {
     Serial.println("Button pressed! Adding new customer...");
 
     // Example: update bread_buffer (here just fill with demo values)
-    bread_buffer[0] = 3;
+    bread_buffer[0] = 0;
     bread_buffer[1] = 2;
 
     // Start task (no param, since we use global bread_count)
@@ -66,5 +68,5 @@ void loop() {
       NULL                 // task handle
     );
     delay(5000);
-    }
+    }    
 }

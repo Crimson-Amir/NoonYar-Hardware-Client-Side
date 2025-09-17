@@ -121,24 +121,23 @@ void ticketFlowTask(void* param) {
       }
 
       CurrentTicketResponse cur = apiCurrentTicket();
-      Serial.println(String("ticketFlowTask:current_ticket_id") + String(cur.current_ticket_id));
+      Serial.println(String("ticketFlowTask:current_ticket_id: ") + String(cur.current_ticket_id));
       lastCheckTime = now;
 
       if (!cur.error.isEmpty() || cur.current_ticket_id < 0) {
-        hasCustomerInQueue = false;
+        if (cur.error == "empty_queue") {hasCustomerInQueue = false;}
         vTaskDelay(5000 / portTICK_PERIOD_MS);
         continue;
       }
 
       hasCustomerInQueue = true;
-      readyToScan = false;
       hasCustomerScanned = false;
       currentTicketID = cur.current_ticket_id;
       int cookTimeSeconds = calculateCookTime(cur);
       
       // TODO: VOICE: NEXT TICKET IN cookTimeSeconds SECOND 
 
-      Serial.println(String("ticketFlowTask:cookTimeSeconds") + String(cookTimeSeconds));
+      Serial.println(String("ticketFlowTask:cookTimeSeconds: ") + String(cookTimeSeconds));
       unsigned long waitDeadline = millis() + (cookTimeSeconds * 1000UL) + bakery_timeout_ms;
       bakery_timeout_ms = 0;
       
@@ -161,6 +160,7 @@ void ticketFlowTask(void* param) {
         if (millis() >= timeForReceiveBread) {
           Serial.println("deadline finished");
           if (!hasCustomerScanned){
+            Serial.println("hsa not scanned. skipping customer ...");
             int* ticketParam = new int(currentTicketID);
 
             if (xTaskCreate(skipTicketTask, "skipTicketTask", 4096, ticketParam, 1, NULL) != pdPASS) 
@@ -174,6 +174,7 @@ void ticketFlowTask(void* param) {
 
         vTaskDelay(1000 / portTICK_PERIOD_MS);
       } 
+      readyToScan = false;
     } else {
         Serial.println("Waiting for init/network...");
         vTaskDelay(5000 / portTICK_PERIOD_MS);
@@ -183,8 +184,8 @@ void ticketFlowTask(void* param) {
 
 void scannerTask(void *pvParameters) {
     while (1) {
-        if (Serial.available()) {
-            String qr = Serial.readStringUntil('\n');  // read scanned QR line
+        if (Serial2.available()) {
+            String qr = Serial2.readStringUntil('\n');
             int pos = qr.indexOf("t=");
             if (pos != -1) {
                 int ticket_id = qr.substring(pos + 2).toInt();
@@ -192,22 +193,30 @@ void scannerTask(void *pvParameters) {
                 Serial.print("Scanned Ticket ID: ");
                 Serial.println(ticket_id);
 
-                // Call API
+                bool is_customer_in_skipped_list = isTicketInSkippedList(ticket_id);
+                Serial.println("is_customer_in_skipped_list: " + String(is_customer_in_skipped_list)); 
+                if (!is_customer_in_skipped_list && !readyToScan){
+                  // showError()
+                  Serial.println("customer is not in skipped list and we are not ready to scan"); 
+                  vTaskDelay(1000 / portTICK_PERIOD_MS);
+                  continue;
+                }
                 NextTicketResponse resp = apiNextTicket(ticket_id);
-
                 if (!resp.error.isEmpty()) {
                     if (resp.error == "invalid_ticket_number") {
+                        Serial.println("invalid_ticket_number"); 
                         // showError();
                     } else {
                         mqttPublishError("tasks:scannerTask:apiNextTicke reponse failed: " + resp.error);
                     }
                 } else {
                     // success
-                    hasCustomerScanned = true;
+                    if (!is_customer_in_skipped_list) {hasCustomerScanned = true;}
+                    Serial.println("success"); 
                     // showNumberOnDisplay(resp.current_ticket_id);
                 }
             }
         }
-        vTaskDelay(500 / portTICK_PERIOD_MS);  // yield to other tasks
+        vTaskDelay(100 / portTICK_PERIOD_MS);  // yield to other tasks
     }
 }

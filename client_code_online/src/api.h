@@ -14,7 +14,7 @@ int apiNewCustomer(const std::vector<int>& breads);
 NextTicketResponse apiNextTicket(int customer_ticket_id);
 CurrentTicketResponse apiCurrentTicket();
 bool apiSkipTicket(int customer_ticket_id);
-
+bool isTicketInSkippedList(int customer_ticket_id);
 // ---------- STORAGE FUNCTIONS ----------
 void saveInitDataToFlash();
 

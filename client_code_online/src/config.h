@@ -10,6 +10,8 @@
 #define DIN_PIN  23
 #define CLK_PIN  18
 #define CS_PIN   5
+#define RXD2 16
+#define TXD2 17
 
 // ---------- NETWORK CONFIG ----------
 extern const char* ssid;
