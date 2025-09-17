@@ -212,7 +212,7 @@ void scannerTask(void *pvParameters) {
                 } else {
                     // success
                     if (!is_customer_in_skipped_list) {hasCustomerScanned = true;}
-                    Serial.println("success"); 
+                    Serial.println("success: " + String(resp.bread_counts[0]) + String(resp.bread_counts[1])); 
                     // showNumberOnDisplay(resp.current_ticket_id);
                 }
             }
