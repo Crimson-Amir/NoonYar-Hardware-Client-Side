@@ -202,3 +202,18 @@ bool isTicketInSkippedList(int customer_ticket_id) {
   return doc["is_ticket_in_skipped_list"].as<bool>();
 
 }
+
+bool apiUpdateTimeout(int time_out_minute) {
+  StaticJsonDocument<256> bodyDoc;
+  bodyDoc["bakery_id"] = atoi(bakery_id);
+  bodyDoc["minutes"] = time_out_minute;
+  String body; serializeJson(bodyDoc, body);
+
+  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/timeout/update"), "PUT", body);
+  if (resp.body.isEmpty()) { 
+    mqttPublishError(String("api:apiUpdateTimeout:failed: empty body (code=" + String(resp.status_code) + ")"));  
+    return false; 
+  }
+
+  return true;
+}

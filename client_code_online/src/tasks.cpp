@@ -65,16 +65,37 @@ void nextTicketTask(void* param) {
   vTaskDelete(NULL);
 }
 
-void currentTicketTask(void* param) {
-  if (!isNetworkReadyForApi()) {
-    vTaskDelete(NULL);
+void bakerForceFinish() {
+  int remaining = 0;
+  if (waitDeadline > millis()) {
+    remaining = (waitDeadline - millis()) / 1000;
   }
 
-  CurrentTicketResponse r = apiCurrentTicket();
-  bool ok = (r.current_ticket_id != -1);
-  if (!ok) mqttPublishError(String("ct:failed:") + r.error);
+  int sendValue = (remaining > 0) ? -remaining : 0;  // prevent -0
 
-  vTaskDelete(NULL);
+  int* param = new int(sendValue);
+
+  if (xTaskCreate(updateTimeoutTask, "updateTimeoutTask", 4096, param, 1, NULL) != pdPASS) {
+    mqttPublishError("tasks:bakerForceFinish:updateTimeoutTask:failed");
+    delete param;
+  }
+
+  // expire both deadlines so loops exit naturally
+  waitDeadline = millis();
+  timeForReceiveBread = millis();
+
+  Serial.println(String("Baker forced finish. Sending: ") + String(sendValue) + " sec");
+}
+
+void sendTimeoutToServer(int seconds) {
+  int* param = new int(seconds);
+
+  if (xTaskCreate(updateTimeoutTask, "updateTimeoutTask", 4096, param, 1, NULL) != pdPASS) {
+    mqttPublishError("tasks:sendTimeoutToServer:updateTimeoutTask:failed");
+    delete param;
+  }
+
+  Serial.println(String("Timeout sent to server: ") + seconds + " sec");
 }
 
 void skipTicketTask(void* param) {
@@ -89,6 +110,21 @@ void skipTicketTask(void* param) {
   if (!ok) mqttPublishError("tasks:skipTicketTask:failed");
 
   vTaskDelete(NULL);
+}
+
+void bakerForceFinish() {
+  // calculate remaining waitDeadline
+  long remaining = 0;
+  if (waitDeadline > millis()) {
+    remaining = (waitDeadline - millis()) / 1000; // in seconds
+  }
+
+  apiTimeout(remaining);
+
+  waitDeadline = millis();
+  timeForReceiveBread = millis();
+
+  Serial.println(String("Baker forced finish. Remaining waitDeadline: ") + remaining + " sec");
 }
 
 int calculateCookTime(const CurrentTicketResponse& cur) {
@@ -138,24 +174,20 @@ void ticketFlowTask(void* param) {
       // TODO: VOICE: NEXT TICKET IN cookTimeSeconds SECOND 
 
       Serial.println(String("ticketFlowTask:cookTimeSeconds: ") + String(cookTimeSeconds));
-      unsigned long waitDeadline = millis() + (cookTimeSeconds * 1000UL) + bakery_timeout_ms;
+      waitDeadline = millis() + (cookTimeSeconds * 1000UL) + bakery_timeout_ms;
       bakery_timeout_ms = 0;
       
       exitWaitTimeout = false;
-      while (!exitWaitTimeout) {
-        if (millis() >= waitDeadline) {
-          exitWaitTimeout = true;
-          Serial.println("Initial wait period finished.");
-        }
+
+      while (millis() <= waitDeadline) {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
       }
 
       // TODO: VOICE: TICKET NUMBER XXX
-      unsigned long timeForReceiveBread = millis() + TIME_FOR_RECEIVE_BREAD_MS;
-      bool processed = false;
+      timeForReceiveBread = millis() + TIME_FOR_RECEIVE_BREAD_MS;
       readyToScan = true;
 
-      while (!processed) {
+      while (true) {
 
         if (millis() >= timeForReceiveBread) {
           Serial.println("deadline finished");
@@ -169,7 +201,7 @@ void ticketFlowTask(void* param) {
                 delete ticketParam;
               }
           }
-          processed = true;
+          break;
         }
 
         vTaskDelay(1000 / portTICK_PERIOD_MS);

@@ -29,6 +29,8 @@ extern bool exitWaitTimeout;
 extern volatile int currentTicketID;
 extern unsigned long lastConnectivityCheck;
 extern unsigned long bakery_timeout_ms;
+extern unsigned long timeForReceiveBread;
+extern unsigned long waitDeadline;
 
 extern int bread_count;
 extern int bread_buffer_count;

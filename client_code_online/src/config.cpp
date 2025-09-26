@@ -17,6 +17,8 @@ bool exitWaitTimeout = false;
 
 unsigned long bakery_timeout_ms = 0;
 unsigned long lastConnectivityCheck = 0;
+unsigned long timeForReceiveBread = 0;
+unsigned long waitDeadline = 0;
 
 int bread_count = 0;
 int bread_buffer_count = 0;
