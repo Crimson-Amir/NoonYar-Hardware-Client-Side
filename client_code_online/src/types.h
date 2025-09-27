@@ -32,6 +32,7 @@ struct NextTicketResponse {
 };
 
 struct CurrentTicketResponse {
+  bool has_customer_in_queue = true;
   int current_ticket_id = -1;
   int breads[MAX_KEYS];
   int bread_counts[MAX_KEYS];
@@ -42,11 +43,10 @@ struct CurrentTicketResponse {
 struct UpcomingCustomerResponse {
   bool empty_upcoming = false;
   bool ready = false;
-  int customer_id = -1;
-
   int breads[MAX_KEYS];
   int bread_counts[MAX_KEYS];
   int bread_count = 0;
+  int cook_time_s = 0;
 
   String error;
 };

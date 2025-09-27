@@ -24,6 +24,7 @@ extern const char* mqtt_server;
 extern const int   mqtt_port;
 extern bool hasCustomerInQueue;
 extern bool hasCustomerScanned;
+extern bool hasUpcomingCustomerInQueue;
 extern bool readyToScan;
 extern bool exitWaitTimeout;
 extern volatile int currentTicketID;

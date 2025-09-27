@@ -7,6 +7,9 @@ WiFiClient net;
 PubSubClient mqtt(net);
 String topic_errors = String("bakery/") + bakery_id + "/error";
 String topic_bread_time = String("bakery/") + bakery_id + "/bread_time_update";
+String topic_customer_queue  = String("bakery/") + bakery_id + "/has_customer_in_queue_update";
+String topic_upcoming_queue  = String("bakery/") + bakery_id + "/has_upcoming_customer_in_queue_update";
+
 
 // ---------- NETWORK STATE MANAGEMENT ----------
 SemaphoreHandle_t networkBlockMutex;
@@ -63,6 +66,8 @@ void ensureConnectivity() {
         lastMqttAttempt = millis();
         if (mqtt.connect(bakery_id)) {
           mqtt.subscribe(topic_bread_time.c_str());
+          mqtt.subscribe(topic_customer_queue.c_str());
+          mqtt.subscribe(topic_upcoming_queue.c_str());
           setStatus(STATUS_NORMAL);
         } else {
           setNetworkBlock(true);

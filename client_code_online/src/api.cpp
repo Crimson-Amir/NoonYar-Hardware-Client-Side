@@ -130,11 +130,6 @@ CurrentTicketResponse apiCurrentTicket() {
   CurrentTicketResponse r;
 
   HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/ct/" + bakery_id), "GET");
-  
-  if (resp.status_code == 404) {
-    r.error = "empty_queue";
-    return r;
-  }
 
   if (resp.body.isEmpty()) {
     mqttPublishError("api:apiCurrentTicket:failed: empty body (code=" + String(resp.status_code) + ")");
@@ -149,7 +144,8 @@ CurrentTicketResponse apiCurrentTicket() {
     r.error = "json_error";
     return r;
   }
-
+  
+  r.has_customer_in_queue = doc["has_customer_in_queue"] | true;
   r.current_ticket_id = doc["current_ticket_id"] | -1;
   if (doc.containsKey("current_user_detail") && doc["current_user_detail"].is<JsonObject>()) {
     JsonObject detail = doc["current_user_detail"].as<JsonObject>();
@@ -206,7 +202,7 @@ bool isTicketInSkippedList(int customer_ticket_id) {
 bool apiUpdateTimeout(int time_out_minute) {
   StaticJsonDocument<256> bodyDoc;
   bodyDoc["bakery_id"] = atoi(bakery_id);
-  bodyDoc["minutes"] = time_out_minute;
+  bodyDoc["seconds"] = time_out_minute;
   String body; serializeJson(bodyDoc, body);
 
   HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/timeout/update"), "PUT", body);
@@ -243,12 +239,11 @@ UpcomingCustomerResponse apiUpcomingCustomer() {
   }
 
   r.empty_upcoming = doc["empty_upcoming"] | false;
-  r.ready          = doc["ready"] | false;
+  r.ready = doc["ready"] | false;
 
   if (r.empty_upcoming == true || r.ready == false) {return r;}
 
-  r.customer_id = doc["customer_id"].as<int>() | -1;
-
+  r.cook_time_s = doc["cook_time_s"] | 0;
   if (doc.containsKey("breads")) {
     JsonObject breadsObj = doc["breads"].as<JsonObject>();
     r.bread_count = 0;
@@ -260,6 +255,7 @@ UpcomingCustomerResponse apiUpcomingCustomer() {
         }
     }
   }
+
   return r;
 }
 

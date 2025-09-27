@@ -2,6 +2,7 @@
 #include "network.h"
 #include "api.h"
 #include "mutex.h"
+#include <ArduinoJson.h>
 
 // ---------- MQTT QUEUE MANAGEMENT ----------
 SemaphoreHandle_t mqttQueueMutex;
@@ -112,10 +113,43 @@ void fetchInitFromMqttTask(void* param) {
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
+    String payloadStr = "";
+    for (unsigned int i = 0; i < length; i++) {
+        payloadStr += (char)payload[i];
+    }
+
+    // --------- Existing bread_time handling ---------
     if (String(topic) == topic_bread_time) {
         xTaskCreatePinnedToCore(
             fetchInitFromMqttTask,
             "FetchInitOnMqtt", 4096, NULL, 1, NULL, 1
         );
+        return;
+    }
+
+    // --------- Update hasCustomerInQueue ---------
+    if (String(topic) == topic_customer_queue) {
+        StaticJsonDocument<64> doc;
+        DeserializationError err = deserializeJson(doc, payloadStr);
+        if (!err && doc.containsKey("state")) {
+            hasCustomerInQueue = doc["state"] | false;
+            Serial.println("MQTT update: hasCustomerInQueue = " + String(hasCustomerInQueue));
+        } else {
+            Serial.println("MQTT invalid payload for customer queue: " + payloadStr);
+        }
+        return;
+    }
+
+    // --------- Update hasUpcomingCustomerInQueue ---------
+    if (String(topic) == topic_upcoming_queue) {
+        StaticJsonDocument<64> doc;
+        DeserializationError err = deserializeJson(doc, payloadStr);
+        if (!err && doc.containsKey("state")) {
+            hasUpcomingCustomerInQueue = doc["state"] | false;
+            Serial.println("MQTT update: hasUpcomingCustomerInQueue = " + String(hasUpcomingCustomerInQueue));
+        } else {
+            Serial.println("MQTT invalid payload for upcoming queue: " + payloadStr);
+        }
+        return;
     }
 }

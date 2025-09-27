@@ -71,31 +71,35 @@ void bakerForceFinish() {
     remaining = (waitDeadline - millis()) / 1000;
   }
 
-  int sendValue = (remaining > 0) ? -remaining : 0;  // prevent -0
+  int sendValue = (remaining > 0) ? -remaining : 0;
 
   int* param = new int(sendValue);
 
-  if (xTaskCreate(updateTimeoutTask, "updateTimeoutTask", 4096, param, 1, NULL) != pdPASS) {
-    mqttPublishError("tasks:bakerForceFinish:updateTimeoutTask:failed");
+  if (xTaskCreate(sendTimeoutToServerTask, "sendTimeoutToServerTask", 4096, param, 1, NULL) != pdPASS) {
+    mqttPublishError("tasks:bakerForceFinish:sendTimeoutToServerTask:failed");
     delete param;
   }
 
-  // expire both deadlines so loops exit naturally
   waitDeadline = millis();
   timeForReceiveBread = millis();
 
   Serial.println(String("Baker forced finish. Sending: ") + String(sendValue) + " sec");
 }
 
-void sendTimeoutToServer(int seconds) {
-  int* param = new int(seconds);
+void sendTimeoutToServerTask(void* param) {
+    int seconds = *(int*)param;
+    delete (int*)param;
 
-  if (xTaskCreate(updateTimeoutTask, "updateTimeoutTask", 4096, param, 1, NULL) != pdPASS) {
-    mqttPublishError("tasks:sendTimeoutToServer:updateTimeoutTask:failed");
-    delete param;
-  }
+    bakery_timeout_ms = seconds * 1000UL;
+  
+    bool ok = apiUpdateTimeout(seconds);
+    if (!ok) {
+        mqttPublishError("tasks:sendTimeoutToServer:apiUpdateTimeout:failed");
+    } else {
+        Serial.println(String("Timeout sent to server: ") + seconds + " sec");
+    }
 
-  Serial.println(String("Timeout sent to server: ") + seconds + " sec");
+    vTaskDelete(NULL);
 }
 
 void skipTicketTask(void* param) {
@@ -110,21 +114,6 @@ void skipTicketTask(void* param) {
   if (!ok) mqttPublishError("tasks:skipTicketTask:failed");
 
   vTaskDelete(NULL);
-}
-
-void bakerForceFinish() {
-  // calculate remaining waitDeadline
-  long remaining = 0;
-  if (waitDeadline > millis()) {
-    remaining = (waitDeadline - millis()) / 1000; // in seconds
-  }
-
-  apiTimeout(remaining);
-
-  waitDeadline = millis();
-  timeForReceiveBread = millis();
-
-  Serial.println(String("Baker forced finish. Remaining waitDeadline: ") + remaining + " sec");
 }
 
 int calculateCookTime(const CurrentTicketResponse& cur) {
@@ -143,33 +132,41 @@ int calculateCookTime(const CurrentTicketResponse& cur) {
 }
 
 void ticketFlowTask(void* param) {
+  const unsigned long POLL_INTERVAL_NO_CUSTOMER = 300000UL;
+  unsigned long lastCheckTime = 0;
   
   while (true) {
 
       if (!(init_success && isNetworkReadyForApi())) {
-        Serial.println("Waiting for init/network...");
+        Serial.println("ticketFlowTask:Waiting for init/network...");
         vTaskDelay(5000 / portTICK_PERIOD_MS);
         continue;
       }
       
-      if (!hasCustomerInQueue) {
+      unsigned long now = millis();
+      
+      if (!hasCustomerInQueue && (now - lastCheckTime < POLL_INTERVAL_NO_CUSTOMER)) {
+        Serial.println("ticketFlowTask:no customer in queue and POLL_INTERVAL_NO_CUSTOMER not passed.");
         vTaskDelay(10000 / portTICK_PERIOD_MS);
         continue;
       }
-
-      unsigned long now = millis();
-
+      Serial.println("ticketFlowTask:hasCustomerInQueue:" + String(hasCustomerInQueue) + "| or time passed");
       CurrentTicketResponse cur = apiCurrentTicket();
-      Serial.println(String("ticketFlowTask:current_ticket_id: ") + String(cur.current_ticket_id));
+      lastCheckTime = now;
+      Serial.println(String("ticketFlowTask:current_ticket_id: ") + String(cur.current_ticket_id) + " | has_customer_in_queue: " + cur.has_customer_in_queue);
 
-      if (!cur.error.isEmpty() || cur.current_ticket_id < 0) {
-        if (cur.error == "empty_queue") {
-          hasCustomerInQueue = false;
-        }
+      if (cur.has_customer_in_queue == false) {
+        Serial.println("ticketFlowTask:5 second delay");
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
         continue;
       }
 
-      hasCustomerInQueue = true;
+      if (!cur.error.isEmpty() || cur.current_ticket_id < 0) {
+        Serial.println("ticketFlowTask:error or not current_ticket_id. 5 sec delay");
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        continue;
+      }
+
       hasCustomerScanned = false;
       currentTicketID = cur.current_ticket_id;
       int cookTimeSeconds = calculateCookTime(cur);
@@ -180,14 +177,13 @@ void ticketFlowTask(void* param) {
       waitDeadline = millis() + (cookTimeSeconds * 1000UL) + bakery_timeout_ms;
       bakery_timeout_ms = 0;
       
-      exitWaitTimeout = false;
-
       while (millis() <= waitDeadline) {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
       }
 
       // TODO: VOICE: TICKET NUMBER XXX
       timeForReceiveBread = millis() + TIME_FOR_RECEIVE_BREAD_MS;
+      Serial.println("ticketFlowTask:timeForReceiveBread:" + String(timeForReceiveBread));
       readyToScan = true;
 
       while (true) {
@@ -209,6 +205,7 @@ void ticketFlowTask(void* param) {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
       } 
       readyToScan = false;
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
 
@@ -252,72 +249,54 @@ void scannerTask(void *pvParameters) {
 }
 
 
-
 void upcomingBreadTask(void* param) {
-  
+  const unsigned long POLL_INTERVAL_NO_CUSTOMER = 300000UL;
+  unsigned long lastCheckTime = 0;
+
   while (true) {
 
       if (!(init_success && isNetworkReadyForApi())) {
-        Serial.println("Waiting for init/network...");
+        Serial.println("upcomingBreadTask:Waiting for init/network...");
         vTaskDelay(5000 / portTICK_PERIOD_MS);
-        continue;
-      }
-      
-      if (!hasUpcomingCustomerInQueue) {
-        vTaskDelay(10000 / portTICK_PERIOD_MS);
         continue;
       }
 
       unsigned long now = millis();
-      CurrentTicketResponse cur = apiCurrentTicket();
-      Serial.println(String("ticketFlowTask:current_ticket_id: ") + String(cur.current_ticket_id));
-
-      if (!cur.error.isEmpty() || cur.current_ticket_id < 0) {
-        if (cur.error == "empty_queue") {
-          hasUpcomingCustomerInQueue = false;
-        }
+      
+      if (!hasUpcomingCustomerInQueue && (now - lastCheckTime < POLL_INTERVAL_NO_CUSTOMER)) {
+        vTaskDelay(10000 / portTICK_PERIOD_MS);
         continue;
       }
 
-      hasCustomerInQueue = true;
-      hasCustomerScanned = false;
-      currentTicketID = cur.current_ticket_id;
-      int cookTimeSeconds = calculateCookTime(cur);
-      
-      // TODO: VOICE: NEXT TICKET IN cookTimeSeconds SECOND 
+      UpcomingCustomerResponse upc = apiUpcomingCustomer();
+      lastCheckTime = now;
+      Serial.println(String("upcomingBreadTask:ready: ") + String(upc.ready));
 
-      Serial.println(String("ticketFlowTask:cookTimeSeconds: ") + String(cookTimeSeconds));
-      waitDeadline = millis() + (cookTimeSeconds * 1000UL) + bakery_timeout_ms;
-      bakery_timeout_ms = 0;
-      
-      exitWaitTimeout = false;
-
-      while (millis() <= waitDeadline) {
+      if (!upc.error.isEmpty()) {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
+        continue;
       }
 
-      // TODO: VOICE: TICKET NUMBER XXX
-      timeForReceiveBread = millis() + TIME_FOR_RECEIVE_BREAD_MS;
-      readyToScan = true;
+      if (upc.empty_upcoming == true) {
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        continue;
+      }
 
-      while (true) {
+      if (upc.ready == false) {
+        vTaskDelay(60000 / portTICK_PERIOD_MS);
+        continue;
+      }
+      
+      // TODO: SEVEN SEGMENT: SHOW BREADS ON DISPLAY 
 
-        if (millis() >= timeForReceiveBread) {
-          Serial.println("deadline finished");
-          if (!hasCustomerScanned){
-            Serial.println("hsa not scanned. skipping customer ...");
-            int* ticketParam = new int(currentTicketID);
+      waitDeadline = millis() + (upc.cook_time_s * 1000UL);
 
-            if (xTaskCreate(skipTicketTask, "skipTicketTask", 4096, ticketParam, 1, NULL) != pdPASS) 
-              {
-                mqttPublishError("tasks:ticketFlowTask:skipTicketTask:failed");
-                delete ticketParam;
-              }
-          }
-          break;
-        }
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-      } 
-      readyToScan = false;
+      while (millis() <= waitDeadline) {
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+      }
+
+      // TODO: SEVEN SEGMENT: CLEAR NUMBER FROM SEVEN SEGMENT
+
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }

@@ -8,10 +8,13 @@
 void fetchInitTask(void* param);
 void newCustomerTask(void* param);
 void nextTicketTask(void* param);
-void currentTicketTask(void* param);
+void sendTimeoutToServer(void* param);
 void skipTicketTask(void* param);
+void bakerForceFinish(void* param);
+void sendTimeoutToServerTask(void* param);
 void ticketFlowTask(void* param);
 void scannerTask(void* param);
+void upcomingBreadTask(void* param);
 
 
 #endif

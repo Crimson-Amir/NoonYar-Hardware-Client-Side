@@ -12,6 +12,9 @@ extern WiFiClient net;
 extern PubSubClient mqtt;
 extern String topic_errors;
 extern String topic_bread_time;
+extern String topic_customer_queue;
+extern String topic_upcoming_queue;
+
 
 // ---------- NETWORK STATE MANAGEMENT ----------
 extern SemaphoreHandle_t networkBlockMutex;

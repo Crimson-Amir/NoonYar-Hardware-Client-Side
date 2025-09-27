@@ -15,6 +15,8 @@ NextTicketResponse apiNextTicket(int customer_ticket_id);
 CurrentTicketResponse apiCurrentTicket();
 bool apiSkipTicket(int customer_ticket_id);
 bool isTicketInSkippedList(int customer_ticket_id);
+UpcomingCustomerResponse apiUpcomingCustomer();
+bool apiUpdateTimeout(int time_out_minute);
 // ---------- STORAGE FUNCTIONS ----------
 void saveInitDataToFlash();
 

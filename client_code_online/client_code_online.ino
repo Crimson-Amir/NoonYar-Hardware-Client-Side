@@ -38,9 +38,9 @@ void setup() {
   // Start tasks
   xTaskCreatePinnedToCore(mqttPublisherTask, "MqttPublisher", 4096, NULL, 2, NULL, 0);
   xTaskCreatePinnedToCore(fetchInitTask, "InitFetchBoot", 4096, NULL, 1, NULL, 1);
-  xTaskCreatePinnedToCore(ticketFlowTask, "TicketFlow", 8192, NULL, 4, NULL, 0);  // Highest priority on Core 0
-  xTaskCreatePinnedToCore(scannerTask, "ScannerTask", 4096, NULL, 3, NULL, 1);  // High priority for responsiveness
-
+  xTaskCreatePinnedToCore(ticketFlowTask, "TicketFlow", 8192, NULL, 4, NULL, 0);
+  xTaskCreatePinnedToCore(scannerTask, "ScannerTask", 4096, NULL, 3, NULL, 1);
+  xTaskCreatePinnedToCore(upcomingBreadTask, "upcomingBreadTask", 4096, NULL, 2, NULL, 1);
   showNumbers(num1, num2, num3);
 
   pinMode(35, INPUT);
