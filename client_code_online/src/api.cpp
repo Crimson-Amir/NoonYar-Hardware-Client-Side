@@ -184,7 +184,7 @@ bool isTicketInSkippedList(int customer_ticket_id) {
   HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/is_ticket_in_skipped_list/" + atoi(bakery_id) + "/" + customer_ticket_id), "GET");
   if (resp.body.isEmpty()) { 
     mqttPublishError(String("api:isTicketInSkippedList:failed: empty body (code=" + String(resp.status_code) + ")"));  
-    return false; 
+    return false;
   }
 
   StaticJsonDocument<768> doc;
@@ -217,3 +217,49 @@ bool apiUpdateTimeout(int time_out_minute) {
 
   return true;
 }
+
+UpcomingCustomerResponse apiUpcomingCustomer() {
+  UpcomingCustomerResponse r;
+
+  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/upc/" + bakery_id), "GET");
+
+  if (resp.status_code == 404) {
+    r.error = "empty_upcoming";
+    return r;
+  }
+
+  if (resp.body.isEmpty()) {
+    mqttPublishError("api:apiUpcomingCustomer:failed: empty body (code=" + String(resp.status_code) + ")");
+    r.error = "http_fail";
+    return r;
+  }
+
+  StaticJsonDocument<768> doc;
+  DeserializationError err = deserializeJson(doc, resp.body);
+  if (err) {
+    mqttPublishError(String("api:apiUpcomingCustomer:error:") + err.c_str() + String(" | Body: ") + String(resp.body));
+    r.error = "json_error";
+    return r;
+  }
+
+  r.empty_upcoming = doc["empty_upcoming"] | false;
+  r.ready          = doc["ready"] | false;
+
+  if (r.empty_upcoming == true || r.ready == false) {return r;}
+
+  r.customer_id = doc["customer_id"].as<int>() | -1;
+
+  if (doc.containsKey("breads")) {
+    JsonObject breadsObj = doc["breads"].as<JsonObject>();
+    r.bread_count = 0;
+    for (JsonPair kv : breadsObj) {
+        if (r.bread_count < MAX_KEYS) {
+            r.breads[r.bread_count]       = String(kv.key().c_str()).toInt();
+            r.bread_counts[r.bread_count] = kv.value().as<int>();
+            r.bread_count++;
+        }
+    }
+  }
+  return r;
+}
+

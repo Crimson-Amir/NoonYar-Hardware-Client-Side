@@ -144,25 +144,28 @@ int calculateCookTime(const CurrentTicketResponse& cur) {
 
 void ticketFlowTask(void* param) {
   
-  unsigned long lastCheckTime = 0;
-  const unsigned long checkInterval = 300000UL;
-
   while (true) {
-    if (init_success && isNetworkReadyForApi()) {
 
-      unsigned long now = millis();
-      if (!hasCustomerInQueue && (now - lastCheckTime < checkInterval)) {
+      if (!(init_success && isNetworkReadyForApi())) {
+        Serial.println("Waiting for init/network...");
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        continue;
+      }
+      
+      if (!hasCustomerInQueue) {
         vTaskDelay(10000 / portTICK_PERIOD_MS);
         continue;
       }
 
+      unsigned long now = millis();
+
       CurrentTicketResponse cur = apiCurrentTicket();
       Serial.println(String("ticketFlowTask:current_ticket_id: ") + String(cur.current_ticket_id));
-      lastCheckTime = now;
 
       if (!cur.error.isEmpty() || cur.current_ticket_id < 0) {
-        if (cur.error == "empty_queue") {hasCustomerInQueue = false;}
-        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        if (cur.error == "empty_queue") {
+          hasCustomerInQueue = false;
+        }
         continue;
       }
 
@@ -203,14 +206,9 @@ void ticketFlowTask(void* param) {
           }
           break;
         }
-
         vTaskDelay(1000 / portTICK_PERIOD_MS);
       } 
       readyToScan = false;
-    } else {
-        Serial.println("Waiting for init/network...");
-        vTaskDelay(5000 / portTICK_PERIOD_MS);
-    }
   }
 }
 
@@ -251,4 +249,75 @@ void scannerTask(void *pvParameters) {
         }
         vTaskDelay(100 / portTICK_PERIOD_MS);  // yield to other tasks
     }
+}
+
+
+
+void upcomingBreadTask(void* param) {
+  
+  while (true) {
+
+      if (!(init_success && isNetworkReadyForApi())) {
+        Serial.println("Waiting for init/network...");
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        continue;
+      }
+      
+      if (!hasUpcomingCustomerInQueue) {
+        vTaskDelay(10000 / portTICK_PERIOD_MS);
+        continue;
+      }
+
+      unsigned long now = millis();
+      CurrentTicketResponse cur = apiCurrentTicket();
+      Serial.println(String("ticketFlowTask:current_ticket_id: ") + String(cur.current_ticket_id));
+
+      if (!cur.error.isEmpty() || cur.current_ticket_id < 0) {
+        if (cur.error == "empty_queue") {
+          hasUpcomingCustomerInQueue = false;
+        }
+        continue;
+      }
+
+      hasCustomerInQueue = true;
+      hasCustomerScanned = false;
+      currentTicketID = cur.current_ticket_id;
+      int cookTimeSeconds = calculateCookTime(cur);
+      
+      // TODO: VOICE: NEXT TICKET IN cookTimeSeconds SECOND 
+
+      Serial.println(String("ticketFlowTask:cookTimeSeconds: ") + String(cookTimeSeconds));
+      waitDeadline = millis() + (cookTimeSeconds * 1000UL) + bakery_timeout_ms;
+      bakery_timeout_ms = 0;
+      
+      exitWaitTimeout = false;
+
+      while (millis() <= waitDeadline) {
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+      }
+
+      // TODO: VOICE: TICKET NUMBER XXX
+      timeForReceiveBread = millis() + TIME_FOR_RECEIVE_BREAD_MS;
+      readyToScan = true;
+
+      while (true) {
+
+        if (millis() >= timeForReceiveBread) {
+          Serial.println("deadline finished");
+          if (!hasCustomerScanned){
+            Serial.println("hsa not scanned. skipping customer ...");
+            int* ticketParam = new int(currentTicketID);
+
+            if (xTaskCreate(skipTicketTask, "skipTicketTask", 4096, ticketParam, 1, NULL) != pdPASS) 
+              {
+                mqttPublishError("tasks:ticketFlowTask:skipTicketTask:failed");
+                delete ticketParam;
+              }
+          }
+          break;
+        }
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+      } 
+      readyToScan = false;
+  }
 }

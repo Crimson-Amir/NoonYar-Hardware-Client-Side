@@ -39,6 +39,19 @@ struct CurrentTicketResponse {
   String error;
 };
 
+struct UpcomingCustomerResponse {
+  bool empty_upcoming = false;
+  bool ready = false;
+  int customer_id = -1;
+
+  int breads[MAX_KEYS];
+  int bread_counts[MAX_KEYS];
+  int bread_count = 0;
+
+  String error;
+};
+
+
 struct HttpResponse {
   int status_code;
   String body;
