@@ -59,14 +59,7 @@ void loop() {
     bread_buffer[1] = 2;
 
     // Start task (no param, since we use global bread_count)
-    xTaskCreate(
-      newCustomerTask,     // function
-      "NewCustomerTask",   // task name
-      4096,                // stack size
-      NULL,                // param (unused now)
-      1,                   // priority
-      NULL                 // task handle
-    );
+    xTaskCreate(newCustomerTask, "NewCustomerTask", 4096, NULL, 1, NULL);
     delay(5000);
     }    
 }
