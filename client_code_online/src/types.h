@@ -22,7 +22,7 @@ struct MqttMessage {
 };
 
 // ---------- API RESPONSE STRUCTURES ----------
-struct NextTicketResponse {
+struct ServeTicketResponse {
   int current_ticket_id = -1;
   bool skipped_customer = false;
   int breads[MAX_KEYS];
@@ -32,6 +32,8 @@ struct NextTicketResponse {
 };
 
 struct CurrentTicketResponse {
+  bool ready = false;
+  int wait_until = -1;
   bool has_customer_in_queue = true;
   int current_ticket_id = -1;
   int breads[MAX_KEYS];

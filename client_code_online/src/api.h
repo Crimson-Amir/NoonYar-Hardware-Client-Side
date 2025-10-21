@@ -11,7 +11,7 @@ extern const char* endpoint_address;
 // ---------- API FUNCTIONS ----------
 bool fetchInitData();
 int apiNewCustomer(const std::vector<int>& breads);
-NextTicketResponse apiNextTicket(int customer_ticket_id);
+ServeTicketResponse apiServeTicket(int customer_ticket_id);
 CurrentTicketResponse apiCurrentTicket();
 bool apiSkipTicket(int customer_ticket_id);
 bool isTicketInSkippedList(int customer_ticket_id);

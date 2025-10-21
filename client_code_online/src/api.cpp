@@ -61,7 +61,7 @@ int apiNewCustomer(const std::vector<int>& breads) {
   }
   String body; serializeJson(bodyDoc, body);
 
-  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/nc"), "PUT", body);
+  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/new_ticket"), "PUT", body);
   if (resp.body.isEmpty()) {
     mqttPublishError("api:apiNewCustomer:failed: empty body (code=" + String(resp.status_code) + ")");
     return -1;
@@ -82,18 +82,18 @@ int apiNewCustomer(const std::vector<int>& breads) {
   return doc["customer_ticket_id"].as<int>();
 }
 
-NextTicketResponse apiNextTicket(int customer_ticket_id) {
-  NextTicketResponse r;
+ServeTicketResponse apiServeTicket(int customer_ticket_id) {
+  ServeTicketResponse r;
 
   StaticJsonDocument<256> bodyDoc;
   bodyDoc["bakery_id"] = atoi(bakery_id);
   bodyDoc["customer_ticket_id"] = customer_ticket_id;
   String body; serializeJson(bodyDoc, body);
 
-  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/nt"), "PUT", body);
+  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/serve_ticket"), "PUT", body);
 
   if (resp.status_code == 400) {
-    r.error = "invalid_ticket_number";
+    r.error = "ticket_is_not_in_skipped_list";
     return r;
   }
 
@@ -129,7 +129,7 @@ NextTicketResponse apiNextTicket(int customer_ticket_id) {
 CurrentTicketResponse apiCurrentTicket() {
   CurrentTicketResponse r;
 
-  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/ct/" + bakery_id), "GET");
+  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/current_ticket/" + bakery_id), "GET");
 
   if (resp.body.isEmpty()) {
     mqttPublishError("api:apiCurrentTicket:failed: empty body (code=" + String(resp.status_code) + ")");
@@ -145,16 +145,21 @@ CurrentTicketResponse apiCurrentTicket() {
     return r;
   }
   
+  bool ready = doc["ready"] | false;
+  r.ready = ready;
+  r.wait_until = doc["wait_until"] | -1;
   r.has_customer_in_queue = doc["has_customer_in_queue"] | true;
   r.current_ticket_id = doc["current_ticket_id"] | -1;
-  if (doc.containsKey("current_user_detail") && doc["current_user_detail"].is<JsonObject>()) {
-    JsonObject detail = doc["current_user_detail"].as<JsonObject>();
-    r.bread_count = 0;
-    for (JsonPair kv : detail) {
-      if (r.bread_count < MAX_KEYS) {
-        r.breads[r.bread_count] = String(kv.key().c_str()).toInt();
-        r.bread_counts[r.bread_count] = kv.value().as<int>();
-        r.bread_count++;
+  if (ready == true){
+    if (doc.containsKey("current_user_detail") && doc["current_user_detail"].is<JsonObject>()) {
+      JsonObject detail = doc["current_user_detail"].as<JsonObject>();
+      r.bread_count = 0;
+      for (JsonPair kv : detail) {
+        if (r.bread_count < MAX_KEYS) {
+          r.breads[r.bread_count] = String(kv.key().c_str()).toInt();
+          r.bread_counts[r.bread_count] = kv.value().as<int>();
+          r.bread_count++;
+        }
       }
     }
   }
@@ -167,7 +172,7 @@ bool apiSkipTicket(int customer_ticket_id) {
   bodyDoc["customer_ticket_id"] = customer_ticket_id;
   String body; serializeJson(bodyDoc, body);
 
-  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/st"), "PUT", body);
+  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/skip_ticket"), "PUT", body);
   if (resp.body.isEmpty()) { 
     mqttPublishError(String("api:apiSkipTicket:failed: empty body (code=" + String(resp.status_code) + ")"));  
     return false; 

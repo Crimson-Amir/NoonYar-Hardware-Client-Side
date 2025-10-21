@@ -51,15 +51,15 @@ void loop() {
   ensureConnectivity();
   checkDeadlock();
 
-  if (digitalRead(BUTTON_PIN) == HIGH) {
-    Serial.println("Button pressed! Adding new customer...");
+  // if (digitalRead(BUTTON_PIN) == HIGH) {
+  //   Serial.println("Button pressed! Adding new customer...");
 
-    // Example: update bread_buffer (here just fill with demo values)
-    bread_buffer[0] = 0;
-    bread_buffer[1] = 2;
+  //   // Example: update bread_buffer (here just fill with demo values)
+  //   bread_buffer[0] = 0;
+  //   bread_buffer[1] = 2;
 
-    // Start task (no param, since we use global bread_count)
-    xTaskCreate(newCustomerTask, "NewCustomerTask", 4096, NULL, 1, NULL);
-    delay(5000);
-    }    
+  //   // Start task (no param, since we use global bread_count)
+  //   xTaskCreate(newCustomerTask, "NewCustomerTask", 4096, NULL, 1, NULL);
+  //   delay(5000);
+  //   }    
 }

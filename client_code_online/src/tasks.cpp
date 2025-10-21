@@ -7,17 +7,17 @@
 #include "network.h"
 
 void fetchInitTask(void* param) {
-    while (WiFi.status() != WL_CONNECTED) {
-      vTaskDelay(5000 / portTICK_PERIOD_MS);
-    }
+    // while (WiFi.status() != WL_CONNECTED) {
+    //   vTaskDelay(5000 / portTICK_PERIOD_MS);
+    // }
 
-    init_success = false;
-    setStatus(STATUS_API_WAITING);
-    while (!fetchInitData()) {
-        mqttPublishError("tasks:fetchInitTask failed. retrying ...");
-        vTaskDelay(INIT_RETRY_DELAY / portTICK_PERIOD_MS);
-    }
-    setStatus(STATUS_NORMAL);
+    // init_success = false;
+    // setStatus(STATUS_API_WAITING);
+    // while (!fetchInitData()) {
+    //     mqttPublishError("tasks:fetchInitTask failed. retrying ...");
+    //     vTaskDelay(INIT_RETRY_DELAY / portTICK_PERIOD_MS);
+    // }
+    // setStatus(STATUS_NORMAL);
     init_success = true;
     vTaskDelete(NULL);
 }
@@ -43,93 +43,93 @@ void newCustomerTask(void* param) {
   vTaskDelete(NULL);
 }
 
-void nextTicketTask(void* param) {
-  int ticketId = *(int*)param;
-  delete (int*)param;
+// void ServeTicketTask(void* param) {
+//   int ticketId = *(int*)param;
+//   delete (int*)param;
 
-  if (!isNetworkReadyForApi()) {
-    vTaskDelete(NULL);
-  }
+//   if (!isNetworkReadyForApi()) {
+//     vTaskDelete(NULL);
+//   }
 
-  if (!tryLockBusy()) {
-    vTaskDelete(NULL);
-  }
+//   if (!tryLockBusy()) {
+//     vTaskDelete(NULL);
+//   }
 
-  setStatus(STATUS_API_WAITING);
-  NextTicketResponse r = apiNextTicket(ticketId);
-  bool ok = (r.current_ticket_id != -1);
-  setStatus(ok ? STATUS_NORMAL : STATUS_API_ERROR);
-  if (!ok) mqttPublishError(String("nt:failed:") + r.error);
+//   setStatus(STATUS_API_WAITING);
+//   ServeTicketResponse r = apiServeTicket(ticketId);
+//   bool ok = (r.current_ticket_id != -1);
+//   setStatus(ok ? STATUS_NORMAL : STATUS_API_ERROR);
+//   if (!ok) mqttPublishError(String("nt:failed:") + r.error);
 
-  unlockBusy();
-  vTaskDelete(NULL);
-}
+//   unlockBusy();
+//   vTaskDelete(NULL);
+// }
 
-void bakerForceFinish() {
-  int remaining = 0;
-  if (waitDeadline > millis()) {
-    remaining = (waitDeadline - millis()) / 1000;
-  }
+// void bakerForceFinish() {
+//   int remaining = 0;
+//   if (waitDeadline > millis()) {
+//     remaining = (waitDeadline - millis()) / 1000;
+//   }
 
-  int sendValue = (remaining > 0) ? -remaining : 0;
+//   int sendValue = (remaining > 0) ? -remaining : 0;
 
-  int* param = new int(sendValue);
+//   int* param = new int(sendValue);
 
-  if (xTaskCreate(sendTimeoutToServerTask, "sendTimeoutToServerTask", 4096, param, 1, NULL) != pdPASS) {
-    mqttPublishError("tasks:bakerForceFinish:sendTimeoutToServerTask:failed");
-    delete param;
-  }
+//   if (xTaskCreate(sendTimeoutToServerTask, "sendTimeoutToServerTask", 4096, param, 1, NULL) != pdPASS) {
+//     mqttPublishError("tasks:bakerForceFinish:sendTimeoutToServerTask:failed");
+//     delete param;
+//   }
 
-  waitDeadline = millis();
-  timeForReceiveBread = millis();
+//   waitDeadline = millis();
+//   timeForReceiveBread = millis();
 
-  Serial.println(String("Baker forced finish. Sending: ") + String(sendValue) + " sec");
-}
+//   Serial.println(String("Baker forced finish. Sending: ") + String(sendValue) + " sec");
+// }
 
-void sendTimeoutToServerTask(void* param) {
-    int seconds = *(int*)param;
-    delete (int*)param;
+// void sendTimeoutToServerTask(void* param) {
+//     int seconds = *(int*)param;
+//     delete (int*)param;
 
-    bakery_timeout_ms = seconds * 1000UL;
+//     bakery_timeout_ms = seconds * 1000UL;
   
-    bool ok = apiUpdateTimeout(seconds);
-    if (!ok) {
-        mqttPublishError("tasks:sendTimeoutToServer:apiUpdateTimeout:failed");
-    } else {
-        Serial.println(String("Timeout sent to server: ") + seconds + " sec");
-    }
+//     bool ok = apiUpdateTimeout(seconds);
+//     if (!ok) {
+//         mqttPublishError("tasks:sendTimeoutToServer:apiUpdateTimeout:failed");
+//     } else {
+//         Serial.println(String("Timeout sent to server: ") + seconds + " sec");
+//     }
 
-    vTaskDelete(NULL);
-}
+//     vTaskDelete(NULL);
+// }
 
-void skipTicketTask(void* param) {
-  int ticketId = *(int*)param;
-  delete (int*)param;
+// void skipTicketTask(void* param) {
+//   int ticketId = *(int*)param;
+//   delete (int*)param;
 
-  if (!isNetworkReadyForApi()) {
-    vTaskDelete(NULL);
-  }
+//   if (!isNetworkReadyForApi()) {
+//     vTaskDelete(NULL);
+//   }
 
-  bool ok = apiSkipTicket(ticketId);
-  if (!ok) mqttPublishError("tasks:skipTicketTask:failed");
+//   bool ok = apiSkipTicket(ticketId);
+//   if (!ok) mqttPublishError("tasks:skipTicketTask:failed");
 
-  vTaskDelete(NULL);
-}
+//   vTaskDelete(NULL);
+// }
 
-int calculateCookTime(const CurrentTicketResponse& cur) {
-  int totalTime = 0;
-  for (int i = 0; i < cur.bread_count; i++) {
-    int breadId = cur.breads[i];
-    int count   = cur.bread_counts[i];
-    for (int j = 0; j < bread_count; j++) {
-      if (breads_id[j] == breadId) {
-        totalTime += count * bread_cook_time[j];
-        break;
-      }
-    }
-  }
-  return totalTime;
-}
+// int calculateCookTime(const CurrentTicketResponse& cur) {
+//   int totalTime = 0;
+//   for (int i = 0; i < cur.bread_count; i++) {
+//     int breadId = cur.breads[i];
+//     int count   = cur.bread_counts[i];
+//     for (int j = 0; j < bread_count; j++) {
+//       if (breads_id[j] == breadId) {
+//         totalTime += count * bread_cook_time[j];
+//         break;
+//       }
+//     }
+//   }
+//   return totalTime;
+// }
 
 void ticketFlowTask(void* param) {
   const unsigned long POLL_INTERVAL_NO_CUSTOMER = 300000UL;
@@ -150,6 +150,7 @@ void ticketFlowTask(void* param) {
         vTaskDelay(10000 / portTICK_PERIOD_MS);
         continue;
       }
+      
       Serial.println("ticketFlowTask:hasCustomerInQueue:" + String(hasCustomerInQueue) + "| or time passed");
       CurrentTicketResponse cur = apiCurrentTicket();
       lastCheckTime = now;
@@ -166,46 +167,21 @@ void ticketFlowTask(void* param) {
         vTaskDelay(5000 / portTICK_PERIOD_MS);
         continue;
       }
+      if (cur.ready == true){
+        // TODO: CALL CUSTOMER 
+        Serial.println("ticketFlowTask:breads are ready!");
 
-      hasCustomerScanned = false;
-      currentTicketID = cur.current_ticket_id;
-      int cookTimeSeconds = calculateCookTime(cur);
-      
-      // TODO: VOICE: NEXT TICKET IN cookTimeSeconds SECOND 
-
-      Serial.println(String("ticketFlowTask:cookTimeSeconds: ") + String(cookTimeSeconds));
-      waitDeadline = millis() + (cookTimeSeconds * 1000UL) + bakery_timeout_ms;
-      bakery_timeout_ms = 0;
-      
-      while (millis() <= waitDeadline) {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        currentTicketID = cur.current_ticket_id;
+        bool resp = apiSkipTicket(currentTicketID);
+        if (!resp) {mqttPublishError("tasks:ticketFlowTask:apiSkipTicket reponse is false");}
       }
-
-      // TODO: VOICE: TICKET NUMBER XXX
-      timeForReceiveBread = millis() + TIME_FOR_RECEIVE_BREAD_MS;
-      Serial.println("ticketFlowTask:timeForReceiveBread:" + String(timeForReceiveBread));
-      readyToScan = true;
-
-      while (true) {
-
-        if (millis() >= timeForReceiveBread) {
-          Serial.println("deadline finished");
-          if (!hasCustomerScanned){
-            Serial.println("hsa not scanned. skipping customer ...");
-            int* ticketParam = new int(currentTicketID);
-
-            if (xTaskCreate(skipTicketTask, "skipTicketTask", 4096, ticketParam, 1, NULL) != pdPASS) 
-              {
-                mqttPublishError("tasks:ticketFlowTask:skipTicketTask:failed");
-                delete ticketParam;
-              }
-          }
-          break;
+      else {
+        waitDeadline = millis() + (cur.wait_until * 1000UL);
+        Serial.println("ticketFlowTask:breads are not ready. wait until" + String(cur.wait_until));
+        while (millis() <= waitDeadline) {
+          vTaskDelay(1000 / portTICK_PERIOD_MS);
         }
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-      } 
-      readyToScan = false;
-      vTaskDelay(1000 / portTICK_PERIOD_MS);
+      }
   }
 }
 
@@ -219,32 +195,23 @@ void scannerTask(void *pvParameters) {
 
                 Serial.print("Scanned Ticket ID: ");
                 Serial.println(ticket_id);
-
-                bool is_customer_in_skipped_list = isTicketInSkippedList(ticket_id);
-                Serial.println("is_customer_in_skipped_list: " + String(is_customer_in_skipped_list)); 
-                if (!is_customer_in_skipped_list && !readyToScan){
-                  // showError()
-                  Serial.println("customer is not in skipped list and we are not ready to scan"); 
-                  vTaskDelay(1000 / portTICK_PERIOD_MS);
-                  continue;
-                }
-                NextTicketResponse resp = apiNextTicket(ticket_id);
+                
+                ServeTicketResponse resp = apiServeTicket(ticket_id);
                 if (!resp.error.isEmpty()) {
-                    if (resp.error == "invalid_ticket_number") {
-                        Serial.println("invalid_ticket_number"); 
+                    if (resp.error == "ticket_is_not_in_skipped_list") {
+                        Serial.println("ticket_is_not_in_skipped_list"); 
                         // showError();
                     } else {
                         mqttPublishError("tasks:scannerTask:apiNextTicke reponse failed: " + resp.error);
                     }
                 } else {
                     // success
-                    if (!is_customer_in_skipped_list) {hasCustomerScanned = true;}
                     Serial.println("success: " + String(resp.bread_counts[0]) + String(resp.bread_counts[1])); 
                     // showNumberOnDisplay(resp.current_ticket_id);
                 }
             }
         }
-        vTaskDelay(100 / portTICK_PERIOD_MS);  // yield to other tasks
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 }
 
@@ -289,9 +256,9 @@ void upcomingBreadTask(void* param) {
       
       // TODO: SEVEN SEGMENT: SHOW BREADS ON DISPLAY 
 
-      waitDeadline = millis() + (upc.cook_time_s * 1000UL);
+      long int waitTime = millis() + (upc.cook_time_s * 1000UL);
 
-      while (millis() <= waitDeadline) {
+      while (millis() <= waitTime) {
         vTaskDelay(5000 / portTICK_PERIOD_MS);
       }
 
