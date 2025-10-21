@@ -153,6 +153,7 @@ void ticketFlowTask(void* param) {
       
       Serial.println("ticketFlowTask:hasCustomerInQueue:" + String(hasCustomerInQueue) + "| or time passed");
       CurrentTicketResponse cur = apiCurrentTicket();
+      
       lastCheckTime = now;
       Serial.println(String("ticketFlowTask:current_ticket_id: ") + String(cur.current_ticket_id) + " | has_customer_in_queue: " + cur.has_customer_in_queue);
 

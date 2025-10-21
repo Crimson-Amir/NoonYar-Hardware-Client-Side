@@ -9,7 +9,7 @@
 
 Preferences prefs;
 volatile bool init_success = false;
-const char* endpoint_address = "http://94.228.165.251:80/hc";
+const char* endpoint_address = "http://noonyar.freebyte.shop:80/hc";
 
 void saveInitDataToFlash() {
   if (!prefs.begin("bakery_data", false)) return;
