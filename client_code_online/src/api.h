@@ -16,6 +16,7 @@ ServeTicketResponse apiServeTicket(int customer_ticket_id);
 CurrentTicketResponse apiCurrentTicket();
 bool apiSendTicketToWaitList(int customer_ticket_id);
 NewBreadResponse apiNewBread();
+bool apiInitCookDisplayFromServer();
 // bool isTicketInSkippedList(int customer_ticket_id);
 // UpcomingCustomerResponse apiUpcomingCustomer();
 // bool apiUpdateTimeout(int time_out_minute);

@@ -161,11 +161,12 @@ void fetchInitTask(void* param) {
         Serial.println("tasks:fetchInitTask failed");
         vTaskDelay(INIT_RETRY_DELAY / portTICK_PERIOD_MS);
     }
+    // After basic init, try to restore cook display state from server
+    apiInitCookDisplayFromServer();
     setStatus(STATUS_NORMAL);
     init_success = true;
     vTaskDelete(NULL);
 }
-
 
 void newCustomerTask(void* param) {
   if (!isNetworkReadyForApi()) {

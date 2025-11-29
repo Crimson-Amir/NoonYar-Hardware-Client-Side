@@ -122,6 +122,48 @@ NewBreadResponse apiNewBread() {
   return r;
 }
 
+bool apiInitCookDisplayFromServer() {
+  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/current_cook_customer/" + bakery_id), "GET");
+
+  if (resp.body.isEmpty() || resp.status_code != 200) {
+    mqttPublishError("api:apiInitCookDisplayFromServer:failed: empty body or invalid status_code (code=" + String(resp.status_code) + " | body= " + String(resp.body) + ")");
+    return false;
+  }
+
+  StaticJsonDocument<512> doc;
+  DeserializationError err = deserializeJson(doc, resp.body);
+  if (err) {
+    mqttPublishError(String("api:apiInitCookDisplayFromServer:error: ") + err.c_str() + String(" | Body: ") + String(resp.body));
+    return false;
+  }
+
+  JsonObject obj = doc.as<JsonObject>();
+
+  // Default: no bread to show on cook display
+  bool hasCustomerKey = obj.containsKey("has_customer");
+  bool hasCustomer = hasCustomerKey ? (bool)obj["has_customer"] : true;
+
+  if (!hasCustomer) {
+    // Mirror behavior of "no bread left": force '-' on cook display
+    bread1_cook_display = -1;
+    bread2_cook_display = -1;
+    bread3_cook_display = -1;
+    return true;
+  }
+
+  if (obj.containsKey("customer_breads") && obj["customer_breads"].is<JsonObject>()) {
+    JsonObject breads = obj["customer_breads"].as<JsonObject>();
+    bread1_cook_display = breads["1"] | 0;
+    bread2_cook_display = breads["2"] | 0;
+    bread3_cook_display = breads["3"] | 0;
+    return true;
+  }
+
+  // If we reach here, we had a successful HTTP/JSON but no useful payload
+  mqttPublishError("api:apiInitCookDisplayFromServer:missing customer_breads in response | Body: " + String(resp.body));
+  return false;
+}
+
 ServeTicketResponse apiServeTicket(int customer_ticket_id) {
   ServeTicketResponse r;
 
