@@ -25,6 +25,8 @@ unsigned long lastConnectivityCheck = 0;
 unsigned long timeForReceiveBread = 0;
 unsigned long waitDeadline = 0;
 
+uint8_t displayEspNowMac[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
 int bread_count = 0;
 int bread_buffer_count = 0;
 int bread_buffer[MAX_KEYS];

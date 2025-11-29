@@ -20,5 +20,8 @@ void confirmAnimationTask(void* param);
 void newBreadButtonTask(void* param);
 // void upcomingBreadTask(void* param);
 
+void initDisplayEspNow();
+bool sendCustomerToDisplay(int ticketId);
+
 
 #endif

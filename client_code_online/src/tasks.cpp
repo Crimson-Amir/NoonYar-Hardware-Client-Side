@@ -6,6 +6,7 @@
 #include "display.h"
 #include "network.h"
 #include <HardwareSerial.h>
+#include <esp_now.h>
 
 // -----------------------------
 // CSN-A2 Printer (UART) Helpers
@@ -48,6 +49,68 @@ const byte fontSize[]          = {29, 33, 0};           // GS ! n - font size
 const byte boldOn[]            = {27, 69, 1};           // ESC E 1 - bold on
 const byte boldOff[]           = {27, 69, 0};           // ESC E 0 - bold off
 const byte resetPrinter[]      = {27, 64};              // ESC @ - reset
+
+static bool espNowInitialized = false;
+
+void initDisplayEspNow() {
+  if (espNowInitialized) {
+    return;
+  }
+
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("ESP-NOW Init Failed!");
+    return;
+  }
+
+  esp_now_peer_info_t peer = {};
+  memcpy(peer.peer_addr, displayEspNowMac, 6);
+  peer.channel = 0;
+  peer.encrypt = false;
+
+  if (esp_now_add_peer(&peer) != ESP_OK) {
+    Serial.println("Failed to add ESP-NOW peer");
+    return;
+  }
+
+  espNowInitialized = true;
+}
+
+bool sendCustomerToDisplay(int ticketId) {
+  if (!espNowInitialized) {
+    initDisplayEspNow();
+  }
+
+  if (!espNowInitialized) {
+    return false;
+  }
+
+  int value = ticketId;
+  esp_err_t result = esp_now_send(displayEspNowMac, reinterpret_cast<const uint8_t*>(&value), sizeof(value));
+  if (result == ESP_OK) {
+    return true;
+  }
+
+  Serial.printf("ESP-NOW send failed (err=%d), re-adding peer and retrying...\n", result);
+  mqttPublishError(String("tasks:sendCustomerToDisplay:first_send_failed:err=") + String(result));
+
+  // Try to recover by re-adding the peer once, then retry send
+  esp_now_del_peer(displayEspNowMac);
+  espNowInitialized = false;
+  initDisplayEspNow();
+
+  if (!espNowInitialized) {
+    return false;
+  }
+
+  result = esp_now_send(displayEspNowMac, reinterpret_cast<const uint8_t*>(&value), sizeof(value));
+  if (result != ESP_OK) {
+    Serial.printf("ESP-NOW send failed again after reinit (err=%d)\n", result);
+    mqttPublishError(String("tasks:sendCustomerToDisplay:retry_failed:err=") + String(result));
+    return false;
+  }
+
+  return true;
+}
 
 // Fixed QR Code commands
 const byte qrModel[]      = {0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00}; // model 2
@@ -323,6 +386,8 @@ void ticketFlowTask(void* param) {
       if (cur.ready == true){
         // TODO: CALL CUSTOMER 
         Serial.println("ticketFlowTask:breads are ready!");
+
+        sendCustomerToDisplay(cur.current_ticket_id);
 
         currentTicketID = cur.current_ticket_id;
         bool resp = apiSendTicketToWaitList(currentTicketID);

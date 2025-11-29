@@ -54,6 +54,8 @@ extern unsigned long bakery_timeout_ms;
 extern unsigned long timeForReceiveBread;
 extern unsigned long waitDeadline;
 
+extern uint8_t displayEspNowMac[6];
+
 extern int bread_count;
 extern int bread_buffer_count;
 extern int bread_buffer[MAX_KEYS];
