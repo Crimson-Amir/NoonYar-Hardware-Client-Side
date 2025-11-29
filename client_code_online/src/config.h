@@ -1,6 +1,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <Arduino.h>
+
 // ---------- HARDWARE CONFIG ----------
 #define MAX_KEYS            10
 #define MAX_HTTP_RETRIES    3
