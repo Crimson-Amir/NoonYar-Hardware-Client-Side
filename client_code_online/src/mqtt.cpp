@@ -140,16 +140,16 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         return;
     }
 
-    // --------- Update hasUpcomingCustomerInQueue ---------
-    if (String(topic) == topic_upcoming_queue) {
-        StaticJsonDocument<64> doc;
-        DeserializationError err = deserializeJson(doc, payloadStr);
-        if (!err && doc.containsKey("state")) {
-            hasUpcomingCustomerInQueue = doc["state"] | false;
-            Serial.println("MQTT update: hasUpcomingCustomerInQueue = " + String(hasUpcomingCustomerInQueue));
-        } else {
-            Serial.println("MQTT invalid payload for upcoming queue: " + payloadStr);
-        }
-        return;
-    }
+    // // --------- Update hasUpcomingCustomerInQueue ---------
+    // if (String(topic) == topic_upcoming_queue) {
+    //     StaticJsonDocument<64> doc;
+    //     DeserializationError err = deserializeJson(doc, payloadStr);
+    //     if (!err && doc.containsKey("state")) {
+    //         hasUpcomingCustomerInQueue = doc["state"] | false;
+    //         Serial.println("MQTT update: hasUpcomingCustomerInQueue = " + String(hasUpcomingCustomerInQueue));
+    //     } else {
+    //         Serial.println("MQTT invalid payload for upcoming queue: " + payloadStr);
+    //     }
+    //     return;
+    // }
 }

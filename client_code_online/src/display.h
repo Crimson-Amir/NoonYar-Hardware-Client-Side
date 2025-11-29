@@ -15,5 +15,9 @@ void displayChar(char c);
 void displayDash();
 void showNumbers(int a, int b, int c);
 void setStatus(DeviceStatus st);
+void showOwnerBreadCounts();
+void showBakerDisplay();
+void showDeliveryDisplay();
+void showCookDisplay();
 
 #endif

@@ -11,16 +11,18 @@
 #define BUTTON_PIN 34
 
 void setup() {
-  // Filesystem
-  Serial.begin(115200);
-  Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
+  // Filesystem / GM66 scanner on UART0 (RX0/TX0)
+  Serial.begin(9600);
   delay(3000);
   LittleFS.begin();
 
   // Display init
   lc.shutdown(0, false);
-  lc.setIntensity(0, 8);
+  lc.setIntensity(0, 15);
   lc.clearDisplay(0);
+  lc.shutdown(1, false);
+  lc.setIntensity(1, 15);
+  lc.clearDisplay(1);
 
   // Mutex initialization
   busyMutex = xSemaphoreCreateMutex();
@@ -40,26 +42,19 @@ void setup() {
   xTaskCreatePinnedToCore(fetchInitTask, "InitFetchBoot", 4096, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(ticketFlowTask, "TicketFlow", 8192, NULL, 4, NULL, 0);
   xTaskCreatePinnedToCore(scannerTask, "ScannerTask", 4096, NULL, 3, NULL, 1);
-  xTaskCreatePinnedToCore(upcomingBreadTask, "upcomingBreadTask", 4096, NULL, 2, NULL, 1);
-  showNumbers(num1, num2, num3);
+  xTaskCreatePinnedToCore(breadButtonsTask, "BreadButtons", 4096, NULL, 2, NULL, 1);
+  xTaskCreatePinnedToCore(confirmButtonTask, "ConfirmButton", 2048, NULL, 2, NULL, 1);
+  xTaskCreatePinnedToCore(confirmAnimationTask, "ConfirmAnim", 2048, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(newBreadButtonTask, "NewBreadButton", 4096, NULL, 2, NULL, 1);
+  // xTaskCreatePinnedToCore(upcomingBreadTask, "upcomingBreadTask", 4096, NULL, 2, NULL, 1);
 
   pinMode(35, INPUT);
   pinMode(BUTTON_PIN, INPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
 }
 
 void loop() {
   ensureConnectivity();
   checkDeadlock();
-
-  // if (digitalRead(BUTTON_PIN) == HIGH) {
-  //   Serial.println("Button pressed! Adding new customer...");
-
-  //   // Example: update bread_buffer (here just fill with demo values)
-  //   bread_buffer[0] = 0;
-  //   bread_buffer[1] = 2;
-
-  //   // Start task (no param, since we use global bread_count)
-  //   xTaskCreate(newCustomerTask, "NewCustomerTask", 4096, NULL, 1, NULL);
-  //   delay(5000);
-  //   }    
 }

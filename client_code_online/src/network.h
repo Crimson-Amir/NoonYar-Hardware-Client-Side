@@ -13,7 +13,7 @@ extern PubSubClient mqtt;
 extern String topic_errors;
 extern String topic_bread_time;
 extern String topic_customer_queue;
-extern String topic_upcoming_queue;
+// extern String topic_upcoming_queue;
 
 
 // ---------- NETWORK STATE MANAGEMENT ----------
@@ -29,6 +29,6 @@ bool isNetworkReady();
 void ensureConnectivity();
 
 // ---------- HTTP FUNCTIONS ----------
-HttpResponse sendHttpRequest(const String& url, const char* method, const String& body = "", uint16_t timeoutMs = HTTP_TIMEOUT);
+HttpResponse sendHttpRequest(const String& url, const char* method, const String& body = "", uint16_t timeoutMs = HTTP_TIMEOUT, uint8_t maxRetries = MAX_HTTP_RETRIES);
 
 #endif

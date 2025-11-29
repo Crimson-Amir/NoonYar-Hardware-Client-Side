@@ -14,7 +14,11 @@ void bakerForceFinish(void* param);
 void sendTimeoutToServerTask(void* param);
 void ticketFlowTask(void* param);
 void scannerTask(void* param);
-void upcomingBreadTask(void* param);
+void breadButtonsTask(void* param);
+void confirmButtonTask(void* param);
+void confirmAnimationTask(void* param);
+void newBreadButtonTask(void* param);
+// void upcomingBreadTask(void* param);
 
 
 #endif

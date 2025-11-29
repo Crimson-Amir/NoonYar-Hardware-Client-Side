@@ -3,7 +3,7 @@
 
 // ---------- HARDWARE CONFIG ----------
 #define MAX_KEYS            10
-#define MAX_HTTP_RETRIES    5
+#define MAX_HTTP_RETRIES    3
 #define MAX_MQTT_QUEUE_SIZE 50
 
 // MAX7219 pins
@@ -12,6 +12,23 @@
 #define CS_PIN   5
 #define RXD2 16
 #define TXD2 17
+
+// Buzzer pin
+#define BUZZER_PIN 19
+
+// Confirmation button pin
+#define CONFIRM_BUTTON_PIN 4
+
+// New bread button pin (pullup on GPIO34)
+#define NEW_BREAD_BUTTON_PIN 34
+
+// Button matrix pins (3x3)
+#define ROW1_PIN 13
+#define ROW2_PIN 14
+#define ROW3_PIN 27
+#define COL1_PIN 25
+#define COL2_PIN 26
+#define COL3_PIN 33
 
 // ---------- NETWORK CONFIG ----------
 extern const char* ssid;
@@ -24,9 +41,13 @@ extern const char* mqtt_server;
 extern const int   mqtt_port;
 extern bool hasCustomerInQueue;
 extern bool hasCustomerScanned;
-extern bool hasUpcomingCustomerInQueue;
+// extern bool hasUpcomingCustomerInQueue;
 extern bool readyToScan;
 extern bool exitWaitTimeout;
+extern bool confirmationMode;
+extern bool confirmationAccepted;
+extern bool uploadInProgress;
+extern bool deliveryPending;
 extern volatile int currentTicketID;
 extern unsigned long lastConnectivityCheck;
 extern unsigned long bakery_timeout_ms;
@@ -39,6 +60,32 @@ extern int bread_buffer[MAX_KEYS];
 extern int breads_id[MAX_KEYS];
 extern int bread_cook_time[MAX_KEYS];
 
+extern int bread1_count;
+extern int bread2_count;
+extern int bread3_count;
+
+// Baker, delivery, and cook display values
+extern int bread1_count_baker_display;
+extern int bread2_count_baker_display;
+extern int bread3_count_baker_display;
+
+extern int bread1_delivery_display;
+extern int bread2_delivery_display;
+extern int bread3_delivery_display;
+
+extern int bread1_cook_display;
+extern int bread2_cook_display;
+extern int bread3_cook_display;
+
+// Display mode for baker vs delivery
+#define DISPLAY_MODE_NONE     0
+#define DISPLAY_MODE_BAKER    1
+#define DISPLAY_MODE_DELIVERY 2
+extern int displayMode;
+
+// Bread limits
+#define MAX_BREAD_PER_TYPE 9
+extern int max_total_breads;
 
 // ---------- TIMING CONFIG ----------
 #define WIFI_RECONNECT_INTERVAL  5000
@@ -46,7 +93,7 @@ extern int bread_cook_time[MAX_KEYS];
 #define DEADLOCK_TIMEOUT        30000
 #define BUSY_TIMEOUT             3000
 #define MQTT_QUEUE_TIMEOUT       2000
-#define HTTP_TIMEOUT            15000
+#define HTTP_TIMEOUT            10000
 #define INIT_HTTP_TIMEOUT        7000
 #define INIT_RETRY_DELAY         5000
 #define HTTP_RETRY_DELAY         2000
