@@ -20,6 +20,8 @@ void confirmAnimationTask(void* param);
 void newBreadButtonTask(void* param);
 // void upcomingBreadTask(void* param);
 
+void printCustomerTicket(int bakeryId, int ticketId, const String& token);
+
 void initDisplayEspNow();
 bool sendCustomerToDisplay(int ticketId);
 

@@ -11,6 +11,7 @@ Preferences prefs;
 volatile bool init_success = false;
 const char* endpoint_address = "http://noonyar.freebyte.shop:80/hc";
 bool last_show_on_display = false;
+String last_ticket_token;
 
 void saveInitDataToFlash() {
   if (!prefs.begin("bakery_data", false)) return;
@@ -30,7 +31,7 @@ bool fetchInitData() {
   HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/hardware_init?bakery_id=" + bakery_id), "GET", "", INIT_HTTP_TIMEOUT);
 
   if (resp.body.isEmpty() || resp.status_code != 200) {
-    mqttPublishError("api:apiSendTicketToWaitList:failed:empty body or invalid status_code (code=" + String(resp.status_code) + " | body= " + String(resp.body) + ")");
+    mqttPublishError("api:fetchInitData:failed:empty body or invalid status_code (code=" + String(resp.status_code) + " | body= " + String(resp.body) + ")");
     return false;
   }
 
@@ -48,6 +49,13 @@ bool fetchInitData() {
     bread_cook_time[bread_count] = kv.value().as<int>();
     bread_count++;
   }
+  if (bread_count != EXPECTED_BREAD_TYPES) {
+    mqttPublishError(String("api:fetchInitData:bread_type_mismatch:expected=") + String(EXPECTED_BREAD_TYPES) +
+                     String(" got=") + String(bread_count));
+    bread_count = 0;
+    return false;
+  }
+
   Serial.print(String(bread_count));
   saveInitDataToFlash();
   return true;
@@ -82,8 +90,15 @@ int apiNewCustomer(const std::vector<int>& breads) {
     return -1;
   }
 
-  // Extract extra flag
+  // Extract extra flag and token
   last_show_on_display = doc["show_on_display"] | false;
+
+  if (!doc.containsKey("token")) {
+    mqttPublishError("api:apiNewCustomer:missing token" + String(" | Body: ") + String(resp.body));
+    return -1;
+  }
+
+  last_ticket_token = String(doc["token"].as<const char*>());
 
   return doc["customer_ticket_id"].as<int>();
 }
@@ -164,15 +179,15 @@ bool apiInitCookDisplayFromServer() {
   return false;
 }
 
-ServeTicketResponse apiServeTicket(int customer_ticket_id) {
+ServeTicketResponse apiServeTicket(const String& ticket_token) {
   ServeTicketResponse r;
 
   StaticJsonDocument<256> bodyDoc;
   bodyDoc["bakery_id"] = atoi(bakery_id);
-  bodyDoc["customer_ticket_id"] = customer_ticket_id;
+  bodyDoc["token"] = ticket_token;
   String body; serializeJson(bodyDoc, body);
 
-  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/serve_ticket"), "PUT", body);
+  HttpResponse resp = sendHttpRequest((String(endpoint_address) + "/serve_ticket_by_token"), "PUT", body);
 
   if (resp.status_code == 404) {
     r.error = "ticket_is_not_in_wait_list";

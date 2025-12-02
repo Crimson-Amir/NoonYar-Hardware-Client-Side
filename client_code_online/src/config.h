@@ -8,6 +8,9 @@
 #define MAX_HTTP_RETRIES    3
 #define MAX_MQTT_QUEUE_SIZE 50
 
+// Expected number of bread types for this bakery
+#define EXPECTED_BREAD_TYPES 3
+
 // MAX7219 pins
 #define DIN_PIN  23
 #define CLK_PIN  18

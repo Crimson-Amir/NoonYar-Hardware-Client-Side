@@ -5,7 +5,7 @@ const char* ssid       = "Netenza_FDC1D0";
 const char* password   = "aA12345!";
 
 const char* bakery_id  = "1";
-const char* token      = "mYbfMk4vNpnAt-koMYRX0IptEv8eGfHsYP5FsdVoNmk";
+const char* token      = "yH1SkARbitwMC8N6-psfscpRdDxM3ttcQClyb6kKGW4";
 
 const char* mqtt_server = "77.110.106.199";
 const int   mqtt_port   = 1883;

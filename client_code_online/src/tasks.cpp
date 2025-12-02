@@ -59,6 +59,7 @@ void initDisplayEspNow() {
 
   if (esp_now_init() != ESP_OK) {
     Serial.println("ESP-NOW Init Failed!");
+    mqttPublishError("tasks:initDisplayEspNow:esp_now_init_failed");
     return;
   }
 
@@ -69,6 +70,7 @@ void initDisplayEspNow() {
 
   if (esp_now_add_peer(&peer) != ESP_OK) {
     Serial.println("Failed to add ESP-NOW peer");
+    mqttPublishError("tasks:initDisplayEspNow:add_peer_failed");
     return;
   }
 
@@ -160,7 +162,7 @@ void ensurePrinterInitialized() {
 }
 
 // Print a simple ticket with customer ID and QR link, no dates
-void printCustomerTicket(int bakeryId, int ticketId) {
+void printCustomerTicket(int bakeryId, int ticketId, const String& token) {
   ensurePrinterInitialized();
 
   sendCommand(alignCenter);
@@ -186,7 +188,7 @@ void printCustomerTicket(int bakeryId, int ticketId) {
 
   // QR code with reservation URL
   char urlBuffer[96];
-  snprintf(urlBuffer, sizeof(urlBuffer), "https://noonyar.ir/res/?b=%d&t=%d", bakeryId, ticketId);
+  snprintf(urlBuffer, sizeof(urlBuffer), "https://noonyar.ir/res/%d/%s", bakeryId, token.c_str());
   printQRCode(urlBuffer);
 
   // Feed a few lines so the user can tear the ticket
@@ -205,6 +207,12 @@ void disableScanner() {
 }
 
 void enableScanner() {
+  // Flush any pending data from scanner so buffered scans during the
+  // blocked period are ignored when we re-enable it.
+  while (Serial.available() > 0) {
+    Serial.read();
+  }
+
   Serial.write(scannerEnableCmd, sizeof(scannerEnableCmd));
 }
 
@@ -387,6 +395,9 @@ void ticketFlowTask(void* param) {
         // TODO: CALL CUSTOMER 
         Serial.println("ticketFlowTask:breads are ready!");
 
+        // Give 10 seconds before moving this ticket to the wait list
+        vTaskDelay(10000 / portTICK_PERIOD_MS);
+
         sendCustomerToDisplay(cur.current_ticket_id);
 
         currentTicketID = cur.current_ticket_id;
@@ -419,14 +430,17 @@ void scannerTask(void *pvParameters) {
 
         if (Serial.available()) {
             String qr = Serial.readStringUntil('\n');
-            int pos = qr.indexOf("t=");
-            if (pos != -1) {
-                int ticket_id = qr.substring(pos + 2).toInt();
 
-                Serial.print("Scanned Ticket ID: ");
-                Serial.println(ticket_id);
+            // Expect URLs like: https://noonyar.ir/res/{bakery_id}/{TOKEN}
+            int lastSlash = qr.lastIndexOf('/');
+            if (lastSlash != -1 && lastSlash + 1 < (int)qr.length()) {
+                String token = qr.substring(lastSlash + 1);
+                token.trim();
+
+                Serial.print("Scanned Token: ");
+                Serial.println(token);
                 
-                ServeTicketResponse resp = apiServeTicket(ticket_id);
+                ServeTicketResponse resp = apiServeTicket(token);
                 if (!resp.error.isEmpty()) {
                     if (resp.error == "ticket_is_not_in_wait_list") {
                         Serial.println("ticket_is_not_in_wait_list"); 
@@ -605,9 +619,9 @@ void breadButtonsTask(void* param) {
 
                     currentTicketID = cid;
 
-                    // Print ticket for customer with QR code and numeric ID
+                    // Print ticket for customer with QR code and token-based URL
                     int bakeryIdInt = atoi(bakery_id);
-                    printCustomerTicket(bakeryIdInt, currentTicketID);
+                    printCustomerTicket(bakeryIdInt, currentTicketID, last_ticket_token);
 
                     // If API says to show on display, update cook display values
                     if (last_show_on_display) {
