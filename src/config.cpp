@@ -1,14 +1,14 @@
 #include "config.h"
 
 // ---------- NETWORK CONFIG ----------
-const char* ssid       = "Netenza_FDC1D0";
-const char* password   = "aA12345!";
+const char *ssid = "Netenza_FDC1D0";
+const char *password = "aA12345!";
 
-const char* bakery_id  = "1";
-const char* token      = "yH1SkARbitwMC8N6-psfscpRdDxM3ttcQClyb6kKGW4";
+const char *bakery_id = "1";
+const char *token = "0q5QnpKVX6OVlGx7eqET3BlC-ftY5-XKZ4mXV-xo-Co";
 
-const char* mqtt_server = "77.110.106.199";
-const int   mqtt_port   = 1883;
+const char *mqtt_server = "77.110.106.199";
+const int mqtt_port = 1883;
 bool hasCustomerInQueue = true;
 bool hasCustomerScanned = false;
 // bool hasUpcomingCustomerInQueue = true;
@@ -51,5 +51,4 @@ int bread3_cook_display = 0;
 
 int displayMode = DISPLAY_MODE_NONE;
 
-int max_total_breads = 5;
-
+int max_total_breads = 20;

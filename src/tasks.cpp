@@ -1,0 +1,1178 @@
+#include "config.h"
+#include "tasks.h"
+#include "api.h"
+#include "mqtt.h"
+#include "mutex.h"
+#include "display.h"
+#include "network.h"
+#include <HardwareSerial.h>
+#include <esp_now.h>
+
+// -----------------------------
+// CSN-A2 Printer (UART) Helpers
+// -----------------------------
+
+HardwareSerial printerSerial(1); // Use UART1 with custom pins (e.g., RX=16, TX=17)
+
+// Wrapper functions to send ESC/POS commands
+template <size_t N>
+void sendCommand(const byte (&command)[N])
+{
+    printerSerial.write(command, N);
+}
+
+template <size_t N>
+void sendCommand(const byte (&command)[N], byte value)
+{
+    byte modifiedCommand[N];
+    for (size_t i = 0; i < N - 1; i++)
+    {
+        modifiedCommand[i] = command[i];
+    }
+    modifiedCommand[N - 1] = value;
+    printerSerial.write(modifiedCommand, N);
+}
+
+template <size_t N>
+void sendCommand(const byte (&command)[N], byte nL, byte nH)
+{
+    byte modifiedCommand[N];
+    for (size_t i = 0; i < N - 2; i++)
+    {
+        modifiedCommand[i] = command[i];
+    }
+    modifiedCommand[N - 2] = nL;
+    modifiedCommand[N - 1] = nH;
+    printerSerial.write(modifiedCommand, N);
+}
+
+// Minimal ESC/POS commands we actually use
+const byte lineFeed[] = {10};                  // LF - new line
+const byte printAndFeedLines[] = {27, 100, 0}; // ESC d n - print and feed n lines
+const byte alignCenter[] = {27, 97, 1};        // ESC a 1 - center alignment
+const byte fontSize[] = {29, 33, 0};           // GS ! n - font size
+const byte boldOn[] = {27, 69, 1};             // ESC E 1 - bold on
+const byte boldOff[] = {27, 69, 0};            // ESC E 0 - bold off
+const byte underlineOn[] = {27, 45, 1};        // ESC - 1 - underline on
+const byte underlineOff[] = {27, 45, 0};       // ESC - 0 - underline off
+const byte resetPrinter[] = {27, 64};          // ESC @ - reset
+
+static bool espNowInitialized = false;
+
+void initDisplayEspNow()
+{
+    if (espNowInitialized)
+    {
+        return;
+    }
+
+    if (esp_now_init() != ESP_OK)
+    {
+        // Serial.println("ESP-NOW Init Failed!");
+        mqttPublishError("tasks:initDisplayEspNow:esp_now_init_failed");
+        return;
+    }
+
+    esp_now_peer_info_t peer = {};
+    memcpy(peer.peer_addr, displayEspNowMac, 6);
+    peer.channel = 0;
+    peer.encrypt = false;
+
+    if (esp_now_add_peer(&peer) != ESP_OK)
+    {
+        // Serial.println("Failed to add ESP-NOW peer");
+        mqttPublishError("tasks:initDisplayEspNow:add_peer_failed");
+        return;
+    }
+
+    espNowInitialized = true;
+}
+
+bool sendCustomerToDisplay(int ticketId)
+{
+    if (!espNowInitialized)
+    {
+        initDisplayEspNow();
+    }
+
+    if (!espNowInitialized)
+    {
+        return false;
+    }
+
+    int value = ticketId;
+    esp_err_t result = esp_now_send(displayEspNowMac, reinterpret_cast<const uint8_t *>(&value), sizeof(value));
+    if (result == ESP_OK)
+    {
+        return true;
+    }
+
+    // Serial.printf("ESP-NOW send failed (err=%d), re-adding peer and retrying...\n", result);
+    mqttPublishError(String("tasks:sendCustomerToDisplay:first_send_failed:err=") + String(result));
+
+    // Try to recover by re-adding the peer once, then retry send
+    esp_now_del_peer(displayEspNowMac);
+    espNowInitialized = false;
+    initDisplayEspNow();
+
+    if (!espNowInitialized)
+    {
+        return false;
+    }
+
+    result = esp_now_send(displayEspNowMac, reinterpret_cast<const uint8_t *>(&value), sizeof(value));
+    if (result != ESP_OK)
+    {
+        // Serial.printf("ESP-NOW send failed again after reinit (err=%d)\n", result);
+        mqttPublishError(String("tasks:sendCustomerToDisplay:retry_failed:err=") + String(result));
+        return false;
+    }
+
+    return true;
+}
+
+// Fixed QR Code commands
+const byte qrModel[] = {0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00}; // model 2
+const byte qrSize[] = {0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, 0x08};        // size 8
+const byte qrErrorLevel[] = {0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x31};  // level M
+const byte qrPrint[] = {0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30};       // print
+
+// persian text hex
+byte bakeryName[] = {0xA7, 0xFE, 0xA2, 0xA4, 0x95, 0x20, 0xFC, 0xFE, 0x90, 0xF8, 0xF7, 0x91, 0xF7};
+byte ticketText[] = {0x91, 0xF5, 0xAA, 0x20, 0x96, 0x93, 0xF8, 0xF7};
+byte scanText1[] = {0xF1, 0xFE, 0xF8, 0x9F, 0x97, 0x20, 0xF6, 0x91, 0xF5, 0xA5, 0x20, 0xA5, 0x90, 0x20, 0xE1, 0xF2, 0xAF, 0x90,
+                    0x20, 0xFD, 0x90, 0xA4, 0x93};
+byte scanText2[] = {0xA2, 0xFE, 0xF7, 0xEE, 0x20, 0xF6, 0xEE, 0xA8, 0x90, 0x20, 0x90, 0xA4, 0x20, 0xA4, 0xFE, 0xA5, 0x20, 0xA2,
+                    0xEE, 0xA4, 0x8D, 0xF8, 0xFE, 0xEE};
+byte noonYarText[] = {0xA4, 0x91, 0xFE, 0xF6, 0xF8, 0xF7};
+
+// تنظیم سایز فونت از 0,0 تا 7,7
+void setFontSize(byte width, byte height)
+{
+    if (width > 7)
+        width = 7;
+    if (height > 7)
+        height = 7;
+
+    byte value = (width * 16) + height;
+
+    // ارسال دستور GS ! n
+    byte command[] = {29, 33, value};
+    printerSerial.write(command, 3);
+}
+
+// Print a QR code for the given URL/string
+void printQRCode(const char *data)
+{
+    // 1. Model
+    sendCommand(qrModel);
+
+    // 2. Size
+    sendCommand(qrSize);
+
+    // 3. Error correction level
+    sendCommand(qrErrorLevel);
+
+    // 4. Store data
+    int dataLength = strlen(data);
+    int pL = (dataLength + 3) % 256; // Low byte
+    int pH = (dataLength + 3) / 256; // High byte
+    byte qrDataHeader[] = {0x1D, 0x28, 0x6B, (byte)pL, (byte)pH, 0x31, 0x50, 0x30};
+    sendCommand(qrDataHeader);
+    printerSerial.write((const uint8_t *)data, dataLength);
+
+    // 5. Print QR code
+    sendCommand(qrPrint);
+
+    // 6. One line gap
+    sendCommand(lineFeed);
+}
+
+// Initialize printer lazily on first use
+void ensurePrinterInitialized()
+{
+    static bool initialized = false;
+    if (initialized)
+    {
+        return;
+    }
+
+    // UART: 19200, 8N1, RX=16, TX=17 (adjust pins to your wiring)
+    printerSerial.begin(19200, SERIAL_8N1, 16, 17);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    sendCommand(resetPrinter);
+    initialized = true;
+}
+
+// Print a simple ticket with customer ID and QR link, no dates
+void printCustomerTicket(int bakeryId, int ticketId, const String &token)
+{
+    ensurePrinterInitialized();
+
+    sendCommand(alignCenter);
+
+    setFontSize(1, 2);
+    sendCommand(bakeryName);
+    sendCommand(printAndFeedLines, 3);
+
+    sendCommand(alignCenter);
+    setFontSize(7, 7);
+    sendCommand(underlineOn);
+    sendCommand(boldOn);
+    char idBuffer[12];
+    snprintf(idBuffer, sizeof(idBuffer), "%d", ticketId);
+    printerSerial.write(idBuffer);
+    sendCommand(underlineOff);
+    sendCommand(boldOff);
+    setFontSize(1, 1);
+    printerSerial.write(" :");
+    sendCommand(ticketText);
+    sendCommand(printAndFeedLines, 4);
+
+    setFontSize(0, 0);
+    sendCommand(scanText1);
+    sendCommand(printAndFeedLines, 1);
+    sendCommand(scanText2);
+    sendCommand(printAndFeedLines, 1);
+
+    // QR code with reservation URL
+    char urlBuffer[96];
+    snprintf(urlBuffer, sizeof(urlBuffer), "https://noonyar.ir/res/%d/%s", bakeryId, token.c_str());
+    printQRCode(urlBuffer);
+    printerSerial.write("NoonYar.ir  |  ");
+    sendCommand(noonYarText);
+    sendCommand(printAndFeedLines, 3);
+}
+
+// -----------------------------
+// GM66 Scanner Helpers (UART0)
+// -----------------------------
+
+const byte scannerDisableCmd[] = {0x7E, 0x00, 0x08, 0x01, 0x00, 0xD9, 0xA0, 0xE8, 0x21};
+const byte scannerEnableCmd[] = {0x7E, 0x00, 0x08, 0x01, 0x00, 0xD9, 0x00, 0x5D, 0xCB};
+
+void disableScanner()
+{
+    Serial.write(scannerDisableCmd, sizeof(scannerDisableCmd));
+}
+
+void enableScanner()
+{
+    // Flush any pending data from scanner so buffered scans during the
+    // blocked period are ignored when we re-enable it.
+    while (Serial.available() > 0)
+    {
+        Serial.read();
+    }
+
+    Serial.write(scannerEnableCmd, sizeof(scannerEnableCmd));
+}
+
+void fetchInitTask(void *param)
+{
+    // Wait for WiFi and MQTT to be fully connected first
+    while (!isNetworkReady())
+    {
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+
+    init_success = false;
+
+    // We are now in init phase (after network but before fetchInitData)
+    setStatus(STATUS_INIT);
+
+    while (!fetchInitData())
+    {
+        mqttPublishError("tasks:fetchInitTask failed. retrying ...");
+        // Serial.println("tasks:fetchInitTask failed");
+        vTaskDelay(INIT_RETRY_DELAY / portTICK_PERIOD_MS);
+    }
+    // After basic init, try to restore cook display state from server
+    apiInitCookDisplayFromServer();
+    setStatus(STATUS_NORMAL);
+    init_success = true;
+    vTaskDelete(NULL);
+}
+
+void newCustomerTask(void *param)
+{
+    if (!isNetworkReadyForApi())
+    {
+        vTaskDelete(NULL);
+    }
+
+    if (!tryLockBusy())
+    {
+        vTaskDelete(NULL);
+    }
+
+    setStatus(STATUS_API_WAITING);
+
+    std::vector<int> breads(bread_buffer, bread_buffer + bread_count);
+    int cid = apiNewCustomer(breads);
+
+    if (cid == -1)
+    {
+        mqttPublishError("tasks:newCustomerTask:failed");
+        setStatus(STATUS_API_ERROR);
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        setStatus(STATUS_NORMAL);
+    }
+    else
+    {
+        setStatus(STATUS_NORMAL);
+    }
+    hasCustomerInQueue = true;
+    unlockBusy();
+    vTaskDelete(NULL);
+}
+
+// void ServeTicketTask(void* param) {
+//   int ticketId = *(int*)param;
+//   delete (int*)param;
+
+//   if (!isNetworkReadyForApi()) {
+//     vTaskDelete(NULL);
+//   }
+
+//   if (!tryLockBusy()) {
+//     vTaskDelete(NULL);
+//   }
+
+//   setStatus(STATUS_API_WAITING);
+//   ServeTicketResponse r = apiServeTicket(ticketId);
+//   bool ok = (r.current_ticket_id != -1);
+//   setStatus(ok ? STATUS_NORMAL : STATUS_API_ERROR);
+//   if (!ok) mqttPublishError(String("nt:failed:") + r.error);
+
+//   unlockBusy();
+//   vTaskDelete(NULL);
+// }
+
+// void bakerForceFinish() {
+//   int remaining = 0;
+//   if (waitDeadline > millis()) {
+//     remaining = (waitDeadline - millis()) / 1000;
+//   }
+
+//   int sendValue = (remaining > 0) ? -remaining : 0;
+
+//   int* param = new int(sendValue);
+
+//   if (xTaskCreate(sendTimeoutToServerTask, "sendTimeoutToServerTask", 4096, param, 1, NULL) != pdPASS) {
+//     mqttPublishError("tasks:bakerForceFinish:sendTimeoutToServerTask:failed");
+//     delete param;
+//   }
+
+//   waitDeadline = millis();
+//   timeForReceiveBread = millis();
+
+//   Serial.println(String("Baker forced finish. Sending: ") + String(sendValue) + " sec");
+// }
+
+// void sendTimeoutToServerTask(void* param) {
+//     int seconds = *(int*)param;
+//     delete (int*)param;
+
+//     bakery_timeout_ms = seconds * 1000UL;
+
+//     bool ok = apiUpdateTimeout(seconds);
+//     if (!ok) {
+//         mqttPublishError("tasks:sendTimeoutToServer:apiUpdateTimeout:failed");
+//     } else {
+//         Serial.println(String("Timeout sent to server: ") + seconds + " sec");
+//     }
+
+//     vTaskDelete(NULL);
+// }
+
+// void skipTicketTask(void* param) {
+//   int ticketId = *(int*)param;
+//   delete (int*)param;
+
+//   if (!isNetworkReadyForApi()) {
+//     vTaskDelete(NULL);
+//   }
+
+//   bool ok = apiSkipTicket(ticketId);
+//   if (!ok) mqttPublishError("tasks:skipTicketTask:failed");
+
+//   vTaskDelete(NULL);
+// }
+
+// int calculateCookTime(const CurrentTicketResponse& cur) {
+//   int totalTime = 0;
+//   for (int i = 0; i < cur.bread_count; i++) {
+//     int breadId = cur.breads[i];
+//     int count   = cur.bread_counts[i];
+//     for (int j = 0; j < bread_count; j++) {
+//       if (breads_id[j] == breadId) {
+//         totalTime += count * bread_cook_time[j];
+//         break;
+//       }
+//     }
+//   }
+//   return totalTime;
+// }
+
+void ticketFlowTask(void *param)
+{
+    const unsigned long POLL_INTERVAL_NO_CUSTOMER = 300000UL;
+    unsigned long lastCheckTime = 0;
+
+    while (true)
+    {
+
+        if (!(init_success && isNetworkReadyForApi()))
+        {
+            // Serial.println("ticketFlowTask:Waiting for init/network...");
+            vTaskDelay(5000 / portTICK_PERIOD_MS);
+            continue;
+        }
+
+        unsigned long now = millis();
+
+        if (!hasCustomerInQueue && (now - lastCheckTime < POLL_INTERVAL_NO_CUSTOMER))
+        {
+            // Serial.println("ticketFlowTask:no customer in queue and POLL_INTERVAL_NO_CUSTOMER not passed.");
+            vTaskDelay(10000 / portTICK_PERIOD_MS);
+            continue;
+        }
+
+        // Serial.println("ticketFlowTask:hasCustomerInQueue:" + String(hasCustomerInQueue) + "| or time passed");
+        CurrentTicketResponse cur = apiCurrentTicket();
+
+        lastCheckTime = now;
+        // Serial.println(String("ticketFlowTask:current_ticket_id: ") + String(cur.current_ticket_id) + " | has_customer_in_queue: " + cur.has_customer_in_queue);
+
+        if (cur.has_customer_in_queue == false)
+        {
+            // Serial.println("ticketFlowTask:5 second delay");
+            vTaskDelay(5000 / portTICK_PERIOD_MS);
+            continue;
+        }
+
+        if (!cur.error.isEmpty() || cur.current_ticket_id < 0)
+        {
+            // Serial.println("ticketFlowTask:error or no current_ticket_id. 10 sec delay");
+            vTaskDelay(10000 / portTICK_PERIOD_MS);
+            continue;
+        }
+        if (cur.ready == true)
+        {
+            // TODO: CALL CUSTOMER
+            // Serial.println("ticketFlowTask:breads are ready!");
+
+            // Give 10 seconds before moving this ticket to the wait list
+            vTaskDelay(10000 / portTICK_PERIOD_MS);
+
+            sendCustomerToDisplay(cur.current_ticket_id);
+
+            currentTicketID = cur.current_ticket_id;
+            bool resp = apiSendTicketToWaitList(currentTicketID);
+            if (!resp)
+            {
+                mqttPublishError("tasks:ticketFlowTask:apiSendTicketToWaitList reponse is false");
+            }
+        }
+        else
+        {
+            waitDeadline = millis() + (cur.wait_until * 1000UL);
+            // Serial.println("ticketFlowTask:breads are not ready. wait until" + String(cur.wait_until));
+            while (millis() <= waitDeadline)
+            {
+                vTaskDelay(1000 / portTICK_PERIOD_MS);
+            }
+        }
+    }
+}
+
+void scannerTask(void *pvParameters)
+{
+    while (1)
+    {
+        // Only process scans when network and init are ready
+        if (!(init_success && isNetworkReady()))
+        {
+            vTaskDelay(500 / portTICK_PERIOD_MS);
+            continue;
+        }
+
+        // Do not accept new scans while a delivery is pending
+        if (deliveryPending)
+        {
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+            continue;
+        }
+
+        if (Serial.available())
+        {
+            String qr = Serial.readStringUntil('\n');
+
+            // Expect URLs like: https://noonyar.ir/res/{bakery_id}/{TOKEN}
+            int lastSlash = qr.lastIndexOf('/');
+            if (lastSlash != -1 && lastSlash + 1 < (int)qr.length())
+            {
+                String token = qr.substring(lastSlash + 1);
+                token.trim();
+
+                // Serial.print("Scanned Token: ");
+                // Serial.println(token);
+
+                ServeTicketResponse resp = apiServeTicket(token);
+                if (!resp.error.isEmpty())
+                {
+                    if (resp.error == "ticket_is_not_in_wait_list")
+                    {
+                        // Serial.println("ticket_is_not_in_wait_list");
+                        // No buzzer for this case anymore
+                    }
+                    else
+                    {
+                        mqttPublishError("tasks:scannerTask:apiNextTicke reponse failed: " + resp.error);
+                    }
+                }
+                else
+                {
+                    // success
+                    // Serial.println("success: " + String(resp.bread_counts[0]) + String(resp.bread_counts[1]));
+                    // Directly map ServeTicketResponse bread_counts into delivery display slots
+                    bread1_delivery_display = resp.bread_counts[0];
+                    bread2_delivery_display = resp.bread_counts[1];
+                    bread3_delivery_display = resp.bread_counts[2];
+
+                    // Mark that a delivery is now pending baker confirmation
+                    deliveryPending = true;
+
+                    // If nothing is currently shown, switch to delivery mode now
+                    if (displayMode == DISPLAY_MODE_NONE)
+                    {
+                        displayMode = DISPLAY_MODE_DELIVERY;
+                    }
+                    showDeliveryDisplay();
+
+                    // Disable scanner light/scan while this delivery is pending
+                    disableScanner();
+
+                    // BUZZER success pattern: single 500ms beep
+                    digitalWrite(BUZZER_PIN, HIGH);
+                    vTaskDelay(500 / portTICK_PERIOD_MS);
+                    digitalWrite(BUZZER_PIN, LOW);
+                }
+            }
+        }
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
+}
+
+void breadButtonsTask(void *param)
+{
+    int rowPins[3] = {ROW1_PIN, ROW2_PIN, ROW3_PIN};
+    int colPins[3] = {COL1_PIN, COL2_PIN, COL3_PIN};
+
+    bool buttonState[3][3] = {{false, false, false}, {false, false, false}, {false, false, false}};
+    bool lastButtonState[3][3] = {{false, false, false}, {false, false, false}, {false, false, false}};
+    unsigned long lastDebounceTime[3][3];
+    for (int r = 0; r < 3; r++)
+    {
+        for (int c = 0; c < 3; c++)
+        {
+            lastDebounceTime[r][c] = 0;
+        }
+    }
+
+    const unsigned long debounceDelay = 50;
+
+    // Init rows as outputs, set HIGH
+    for (int i = 0; i < 3; i++)
+    {
+        pinMode(rowPins[i], OUTPUT);
+        digitalWrite(rowPins[i], HIGH);
+    }
+
+    // Init cols as inputs with pullups
+    for (int i = 0; i < 3; i++)
+    {
+        pinMode(colPins[i], INPUT_PULLUP);
+    }
+
+    while (1)
+    {
+        // Only respond to buttons when network and init are ready
+        if (!(init_success && isNetworkReady()))
+        {
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+            continue;
+        }
+
+        // Scan each row
+        for (int row = 0; row < 3; row++)
+        {
+            // Set current row LOW, others HIGH
+            for (int i = 0; i < 3; i++)
+            {
+                digitalWrite(rowPins[i], (i == row) ? LOW : HIGH);
+            }
+
+            // Small settle delay
+            delayMicroseconds(10);
+
+            // Read all columns
+            for (int col = 0; col < 3; col++)
+            {
+                bool reading = (digitalRead(colPins[col]) == LOW); // LOW = pressed
+
+                if (reading != lastButtonState[row][col])
+                {
+                    lastDebounceTime[row][col] = millis();
+                }
+
+                if ((millis() - lastDebounceTime[row][col]) > debounceDelay)
+                {
+                    if (reading != buttonState[row][col])
+                    {
+                        buttonState[row][col] = reading;
+
+                        if (buttonState[row][col])
+                        {
+                        // Serial.print("Button PRESSED (row,col): ");
+                        // Serial.print(row);
+                        // Serial.print(", ");
+                        // Serial.println(col);
+                        if (deliveryPending && displayMode == DISPLAY_MODE_DELIVERY && row == 1 && col == 2)
+                        {
+                            // Accept delivery only on Row1, Col2 when delivery is currently shown
+                            bread1_delivery_display = 0;
+                            bread2_delivery_display = 0;
+                            bread3_delivery_display = 0;
+                            lc.setRow(1, 0, 0);
+                            lc.setRow(1, 5, 0);
+                            lc.setRow(1, 1, 0);
+                            deliveryPending = false;
+
+                            // Re-enable scanner once baker has confirmed this delivery
+                            enableScanner();
+
+                            // If there is a pending baker reservation, show it now
+                            int bakerTotal = bread1_count_baker_display + bread2_count_baker_display + bread3_count_baker_display;
+                            if (bakerTotal > 0)
+                            {
+                                displayMode = DISPLAY_MODE_BAKER;
+                                showBakerDisplay();
+                            }
+                            else
+                            {
+                                displayMode = DISPLAY_MODE_NONE;
+                                showBakerDisplay();
+                            }
+                        }
+                        else if (confirmationMode)
+                            {
+                                // In confirmation mode, buttons act as ACCEPT/REJECT only
+                                if (row == 1 && col == 2)
+                                {
+                                    // Accept (Row2, Col3) -> send order to server
+                                    confirmationAccepted = true;
+
+                                    // Build breads vector mapped from bread1..3 to breads_id
+                                    std::vector<int> breads;
+                                    breads.reserve(bread_count);
+                                    for (int i = 0; i < bread_count; ++i)
+                                    {
+                                        if (i == 0)
+                                            breads.push_back(bread1_count);
+                                        else if (i == 1)
+                                            breads.push_back(bread2_count);
+                                        else if (i == 2)
+                                            breads.push_back(bread3_count);
+                                        else
+                                            breads.push_back(0);
+                                    }
+
+                                    // While apiNewCustomer is running, confirmationMode stays true.
+                                    // uploadInProgress enables baker display animation.
+                                    uploadInProgress = true;
+                                    int cid = apiNewCustomer(breads);
+                                    if (cid == -1)
+                                    {
+                                        mqttPublishError("tasks:breadButtonsTask:apiNewCustomer failed");
+                                        setStatus(STATUS_API_ERROR);
+                                        // Reset baker display counts on failure
+                                        bread1_count_baker_display = 0;
+                                        bread2_count_baker_display = 0;
+                                        bread3_count_baker_display = 0;
+                                        showOwnerBreadCounts();
+                                        uploadInProgress = false;
+                                        confirmationMode = false;
+                                        vTaskDelay(5000 / portTICK_PERIOD_MS);
+                                        setStatus(STATUS_NORMAL);
+
+                                        // After finishing (failed) baker confirmation, if a delivery is pending, show it; otherwise clear display mode
+                                        int deliveryTotal = bread1_delivery_display + bread2_delivery_display + bread3_delivery_display;
+                                        if (deliveryPending && deliveryTotal > 0)
+                                        {
+                                            displayMode = DISPLAY_MODE_DELIVERY;
+                                            showDeliveryDisplay();
+                                        }
+                                        else
+                                        {
+                                            displayMode = DISPLAY_MODE_NONE;
+                                            showBakerDisplay();
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // Save current counts before we reset them
+                                        int c1 = bread1_count;
+                                        int c2 = bread2_count;
+                                        int c3 = bread3_count;
+
+                                        currentTicketID = cid;
+
+                                        // Print ticket for customer with QR code and token-based URL
+                                        int bakeryIdInt = atoi(bakery_id);
+                                        printCustomerTicket(bakeryIdInt, currentTicketID, last_ticket_token);
+
+                                        // If API says to show on display, update cook display values
+                                        if (last_show_on_display)
+                                        {
+                                            bread1_cook_display = c1;
+                                            bread2_cook_display = c2;
+                                            bread3_cook_display = c3;
+
+                                            // Buzzer: 500 ms when show_on_display is true
+                                            digitalWrite(BUZZER_PIN, HIGH);
+                                            vTaskDelay(500 / portTICK_PERIOD_MS);
+                                            digitalWrite(BUZZER_PIN, LOW);
+                                        }
+
+                                        // Success: reset bread counts and delivery display, unlock buttons
+                                        bread1_count = 0;
+                                        bread2_count = 0;
+                                        bread3_count = 0;
+                                        num1 = bread1_count;
+                                        num2 = bread2_count;
+                                        num3 = bread3_count;
+
+                                        bread1_count_baker_display = 0;
+                                        bread2_count_baker_display = 0;
+                                        bread3_count_baker_display = 0;
+
+                                        // Clear baker digits (1,6 / 1,4 / 1,3)
+                                        lc.setRow(1, 6, 0);
+                                        lc.setRow(1, 4, 0);
+                                        lc.setRow(1, 3, 0);
+
+                                        uploadInProgress = false;
+                                        confirmationMode = false;
+                                        setStatus(STATUS_NORMAL);
+
+                                        // After successful baker confirmation, if a delivery is pending, show it; otherwise clear display mode
+                                        int deliveryTotal = bread1_delivery_display + bread2_delivery_display + bread3_delivery_display;
+                                        if (deliveryPending && deliveryTotal > 0)
+                                        {
+                                            displayMode = DISPLAY_MODE_DELIVERY;
+                                            showDeliveryDisplay();
+                                        }
+                                        else
+                                        {
+                                            displayMode = DISPLAY_MODE_NONE;
+                                            showBakerDisplay();
+                                        }
+                                    }
+                                }
+                                else if (row == 2 && col == 2)
+                                {
+                                    // Reject (Row3, Col3): clear owner display, reset bread counts and baker displays
+                                    confirmationAccepted = false;
+                                    confirmationMode = false;
+                                    uploadInProgress = false;
+
+                                    bread1_count = 0;
+                                    bread2_count = 0;
+                                    bread3_count = 0;
+                                    num1 = bread1_count;
+                                    num2 = bread2_count;
+                                    num3 = bread3_count;
+
+                                    bread1_count_baker_display = 0;
+                                    bread2_count_baker_display = 0;
+                                    bread3_count_baker_display = 0;
+
+                                    // Clear owner digits on device 1
+                                    lc.setRow(1, 6, 0);
+                                    lc.setRow(1, 4, 0);
+                                    lc.setRow(1, 3, 0);
+
+                                    // Show reset counts on main display (0,0 - 0,2 - 0,3)
+                                    showNumbers(num1, num2, num3);
+
+                                    // After rejecting baker confirmation, if a delivery is pending, show it; otherwise clear display mode
+                                    int deliveryTotal = bread1_delivery_display + bread2_delivery_display + bread3_delivery_display;
+                                    if (deliveryPending && deliveryTotal > 0)
+                                    {
+                                        displayMode = DISPLAY_MODE_DELIVERY;
+                                        showDeliveryDisplay();
+                                    }
+                                    else
+                                    {
+                                        displayMode = DISPLAY_MODE_NONE;
+                                        showBakerDisplay();
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // Normal bread increment/decrement logic
+                                int totalBefore = bread1_count + bread2_count + bread3_count;
+                                int totalAfter = totalBefore;
+
+                                if (row == 0 && col == 0)
+                                {
+                                    if (bread1_count > 0)
+                                    {
+                                        bread1_count--;
+                                        totalAfter--;
+                                    }
+                                }
+                                else if (row == 0 && col == 1)
+                                {
+                                    if (bread1_count < MAX_BREAD_PER_TYPE && totalBefore < max_total_breads)
+                                    {
+                                        bread1_count++;
+                                        totalAfter++;
+                                    }
+                                }
+                                else if (row == 1 && col == 0)
+                                {
+                                    if (bread2_count > 0)
+                                    {
+                                        bread2_count--;
+                                        totalAfter--;
+                                    }
+                                }
+                                else if (row == 1 && col == 1)
+                                {
+                                    if (bread2_count < MAX_BREAD_PER_TYPE && totalBefore < max_total_breads)
+                                    {
+                                        bread2_count++;
+                                        totalAfter++;
+                                    }
+                                }
+                                else if (row == 2 && col == 0)
+                                {
+                                    if (bread3_count > 0)
+                                    {
+                                        bread3_count--;
+                                        totalAfter--;
+                                    }
+                                }
+                                else if (row == 2 && col == 1)
+                                {
+                                    if (bread3_count < MAX_BREAD_PER_TYPE && totalBefore < max_total_breads)
+                                    {
+                                        bread3_count++;
+                                        totalAfter++;
+                                    }
+                                }
+
+                                if (totalAfter != totalBefore)
+                                {
+                                    num1 = bread1_count;
+                                    num2 = bread2_count;
+                                    num3 = bread3_count;
+                                    showNumbers(num1, num2, num3);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Serial.print("Button RELEASED (row,col): ");
+                            // Serial.print(row);
+                            // Serial.print(", ");
+                            // Serial.println(col);
+                        }
+                    }
+                }
+
+                lastButtonState[row][col] = reading;
+            }
+        }
+
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}
+
+void confirmButtonTask(void *param)
+{
+    pinMode(CONFIRM_BUTTON_PIN, INPUT_PULLUP);
+
+    int lastReading = HIGH;
+    int stableState = HIGH;
+    unsigned long lastDebounceTime = 0;
+    const unsigned long debounceDelay = 50;
+
+    while (1)
+    {
+        // Only allow confirmation when network and init are ready
+        if (!(init_success && isNetworkReady()))
+        {
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+            continue;
+        }
+
+        int reading = digitalRead(CONFIRM_BUTTON_PIN);
+
+        // If the reading changed, reset debounce timer
+        if (reading != lastReading)
+        {
+            lastDebounceTime = millis();
+        }
+
+        if ((millis() - lastDebounceTime) > debounceDelay)
+        {
+            // If the debounced state changed, act on edges
+            if (reading != stableState)
+            {
+                // Detect button press: HIGH -> LOW
+                if (stableState == HIGH && reading == LOW)
+                {
+                    if (!confirmationMode && currentStatus == STATUS_NORMAL)
+                    {
+                        int totalBread = bread1_count + bread2_count + bread3_count;
+                        if (totalBread <= 0)
+                        {
+                            // Serial.println("Confirm button ignored: all bread counts are zero");
+                        }
+                        else
+                        {
+                            // Serial.println("Confirm button pressed -> entering confirmation mode");
+
+                            // First enter confirmation mode and update baker display
+                            confirmationMode = true;
+                            confirmationAccepted = false;
+                            uploadInProgress = false;
+
+                            // Copy current bread counts into baker display variables
+                            bread1_count_baker_display = bread1_count;
+                            bread2_count_baker_display = bread2_count;
+                            bread3_count_baker_display = bread3_count;
+
+                            // If no display is active, switch to baker mode now
+                            if (displayMode == DISPLAY_MODE_NONE)
+                            {
+                                displayMode = DISPLAY_MODE_BAKER;
+                            }
+                            showBakerDisplay();
+
+                            // Then play 500 ms buzzer to notify baker
+                            digitalWrite(BUZZER_PIN, HIGH);
+                            vTaskDelay(500 / portTICK_PERIOD_MS);
+                            digitalWrite(BUZZER_PIN, LOW);
+                        }
+                    }
+                }
+                stableState = reading;
+            }
+        }
+
+        lastReading = reading;
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}
+
+void confirmAnimationTask(void *param)
+{
+    // Segment animation masks (one segment on at a time)
+    const byte segmentMasks[6] = {
+        0b01000000, // A
+        0b00100000, // B
+        0b00010000, // C
+        0b00001000, // D
+        0b00000100, // E
+        0b00000010  // F
+    };
+
+    int step = 0;
+
+    while (1)
+    {
+        if (confirmationMode && currentStatus == STATUS_NORMAL)
+        {
+            byte mask = segmentMasks[step];
+
+            // Always animate customer-facing digits 0,2,3 on device 0
+            lc.setRow(0, 0, mask);
+            lc.setRow(0, 2, mask);
+            lc.setRow(0, 3, mask);
+
+            // Only touch baker-side digits when baker display is the active mode
+            if (displayMode == DISPLAY_MODE_BAKER)
+            {
+                if (uploadInProgress)
+                {
+                    // During upload, animate baker display digits 1,6 / 1,4 / 1,3
+                    lc.setRow(1, 6, mask);
+                    lc.setRow(1, 4, mask);
+                    lc.setRow(1, 3, mask);
+                }
+                else
+                {
+                    // Before accept, keep baker display showing static counts
+                    showOwnerBreadCounts();
+                }
+            }
+
+            step = (step + 1) % 6;
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+        }
+        else
+        {
+            vTaskDelay(50 / portTICK_PERIOD_MS);
+        }
+    }
+}
+
+void newBreadButtonTask(void *param)
+{
+    pinMode(NEW_BREAD_BUTTON_PIN, INPUT_PULLUP);
+
+    int lastReading = HIGH;
+    int stableState = HIGH;
+    unsigned long lastDebounceTime = 0;
+    const unsigned long debounceDelay = 50;
+
+    while (1)
+    {
+        // Only accept new-bread events when network and init are ready
+        if (!(init_success && isNetworkReady()))
+        {
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+            continue;
+        }
+
+        int reading = digitalRead(NEW_BREAD_BUTTON_PIN);
+
+        if (reading != lastReading)
+        {
+            lastDebounceTime = millis();
+        }
+
+        if ((millis() - lastDebounceTime) > debounceDelay)
+        {
+            if (reading != stableState)
+            {
+                // Detect LOW press (HIGH -> LOW): one new bread went to oven
+                if (stableState == HIGH && reading == LOW)
+                {
+                    NewBreadResponse r = apiNewBread();
+
+                    if (!r.error.isEmpty())
+                    {
+                        setStatus(STATUS_API_ERROR);
+                        vTaskDelay(5000 / portTICK_PERIOD_MS);
+                        setStatus(STATUS_NORMAL);
+                    }
+                    else
+                    {
+                        // Normal case: response has "customer_breads" with counts
+                        if (r.has_customer_breads &&
+                            (r.bread_counts[0] > 0 || r.bread_counts[1] > 0 || r.bread_counts[2] > 0))
+                        {
+                            // Update cook display counts from customer_breads
+                            bread1_cook_display = r.bread_counts[0];
+                            bread2_cook_display = r.bread_counts[1];
+                            bread3_cook_display = r.bread_counts[2];
+                        }
+                        else
+                        {
+                            // No bread left to cook: force '-' on cook display
+                            bread1_cook_display = -1;
+                            bread2_cook_display = -1;
+                            bread3_cook_display = -1;
+                        }
+
+                        // If next_customer is true, animate cook display + buzzer
+                        if (r.next_customer)
+                        {
+                            for (int i = 0; i < 3; ++i)
+                            {
+                                digitalWrite(BUZZER_PIN, HIGH);
+                                showCookDisplay();
+                                vTaskDelay(300 / portTICK_PERIOD_MS);
+
+                                digitalWrite(BUZZER_PIN, LOW);
+                                lc.setRow(1, 2, 0);
+                                lc.setRow(1, 7, 0);
+                                lc.setRow(0, 4, 0);
+                                vTaskDelay(200 / portTICK_PERIOD_MS);
+                            }
+
+                            // Restore cook display after animation
+                            showCookDisplay();
+                        }
+
+                        setStatus(STATUS_NORMAL);
+                    }
+                }
+                stableState = reading;
+            }
+        }
+
+        lastReading = reading;
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}
+
+// void upcomingBreadTask(void* param) {
+//   const unsigned long POLL_INTERVAL_NO_CUSTOMER = 300000UL;
+//   unsigned long lastCheckTime = 0;
+
+//   while (true) {
+
+//       if (!(init_success && isNetworkReadyForApi())) {
+//         Serial.println("upcomingBreadTask:Waiting for init/network...");
+//         vTaskDelay(5000 / portTICK_PERIOD_MS);
+//         continue;
+//       }
+
+//       unsigned long now = millis();
+
+//       if (!hasUpcomingCustomerInQueue && (now - lastCheckTime < POLL_INTERVAL_NO_CUSTOMER)) {
+//         vTaskDelay(10000 / portTICK_PERIOD_MS);
+//         continue;
+//       }
+
+//       UpcomingCustomerResponse upc = apiUpcomingCustomer();
+//       lastCheckTime = now;
+//       Serial.println(String("upcomingBreadTask:ready: ") + String(upc.ready));
+
+//       if (!upc.error.isEmpty()) {
+//         vTaskDelay(1000 / portTICK_PERIOD_MS);
+//         continue;
+//       }
+
+//       if (upc.empty_upcoming == true) {
+//         vTaskDelay(5000 / portTICK_PERIOD_MS);
+//         continue;
+//       }
+
+//       if (upc.ready == false) {
+//         vTaskDelay(60000 / portTICK_PERIOD_MS);
+//         continue;
+//       }
+
+//       // TODO: SEVEN SEGMENT: SHOW BREADS ON DISPLAY
+
+//       long int waitTime = millis() + (upc.cook_time_s * 1000UL);
+
+//       while (millis() <= waitTime) {
+//         vTaskDelay(5000 / portTICK_PERIOD_MS);
+//       }
+
+//       // TODO: SEVEN SEGMENT: CLEAR NUMBER FROM SEVEN SEGMENT
+
+//       vTaskDelay(1000 / portTICK_PERIOD_MS);
+//   }
+// }

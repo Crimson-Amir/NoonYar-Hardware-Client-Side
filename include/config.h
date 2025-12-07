@@ -4,17 +4,17 @@
 #include <Arduino.h>
 
 // ---------- HARDWARE CONFIG ----------
-#define MAX_KEYS            10
-#define MAX_HTTP_RETRIES    3
+#define MAX_KEYS 10
+#define MAX_HTTP_RETRIES 3
 #define MAX_MQTT_QUEUE_SIZE 50
 
 // Expected number of bread types for this bakery
 #define EXPECTED_BREAD_TYPES 3
 
 // MAX7219 pins
-#define DIN_PIN  23
-#define CLK_PIN  18
-#define CS_PIN   5
+#define DIN_PIN 23
+#define CLK_PIN 18
+#define CS_PIN 5
 #define RXD2 16
 #define TXD2 17
 
@@ -36,14 +36,14 @@
 #define COL3_PIN 33
 
 // ---------- NETWORK CONFIG ----------
-extern const char* ssid;
-extern const char* password;
+extern const char *ssid;
+extern const char *password;
 
-extern const char* bakery_id;
-extern const char* token;
+extern const char *bakery_id;
+extern const char *token;
 
-extern const char* mqtt_server;
-extern const int   mqtt_port;
+extern const char *mqtt_server;
+extern const int mqtt_port;
 extern bool hasCustomerInQueue;
 extern bool hasCustomerScanned;
 // extern bool hasUpcomingCustomerInQueue;
@@ -85,8 +85,8 @@ extern int bread2_cook_display;
 extern int bread3_cook_display;
 
 // Display mode for baker vs delivery
-#define DISPLAY_MODE_NONE     0
-#define DISPLAY_MODE_BAKER    1
+#define DISPLAY_MODE_NONE 0
+#define DISPLAY_MODE_BAKER 1
 #define DISPLAY_MODE_DELIVERY 2
 extern int displayMode;
 
@@ -95,15 +95,15 @@ extern int displayMode;
 extern int max_total_breads;
 
 // ---------- TIMING CONFIG ----------
-#define WIFI_RECONNECT_INTERVAL  5000
-#define MQTT_RECONNECT_INTERVAL  3000
-#define DEADLOCK_TIMEOUT        30000
-#define BUSY_TIMEOUT             3000
-#define MQTT_QUEUE_TIMEOUT       2000
-#define HTTP_TIMEOUT            10000
-#define INIT_HTTP_TIMEOUT        7000
-#define INIT_RETRY_DELAY         5000
-#define HTTP_RETRY_DELAY         2000
+#define WIFI_RECONNECT_INTERVAL 5000
+#define MQTT_RECONNECT_INTERVAL 3000
+#define DEADLOCK_TIMEOUT 30000
+#define BUSY_TIMEOUT 3000
+#define MQTT_QUEUE_TIMEOUT 2000
+#define HTTP_TIMEOUT 10000
+#define INIT_HTTP_TIMEOUT 7000
+#define INIT_RETRY_DELAY 5000
+#define HTTP_RETRY_DELAY 2000
 #define CONNECTIVITY_CHECK_INTERVAL 2000
 #define TIME_FOR_RECEIVE_BREAD_MS 60000
 

@@ -15,7 +15,6 @@ extern String topic_bread_time;
 extern String topic_customer_queue;
 // extern String topic_upcoming_queue;
 
-
 // ---------- NETWORK STATE MANAGEMENT ----------
 extern SemaphoreHandle_t networkBlockMutex;
 extern bool networkBlock;
@@ -29,6 +28,6 @@ bool isNetworkReady();
 void ensureConnectivity();
 
 // ---------- HTTP FUNCTIONS ----------
-HttpResponse sendHttpRequest(const String& url, const char* method, const String& body = "", uint16_t timeoutMs = HTTP_TIMEOUT, uint8_t maxRetries = MAX_HTTP_RETRIES);
+HttpResponse sendHttpRequest(const String &url, const char *method, const String &body = "", uint16_t timeoutMs = HTTP_TIMEOUT, uint8_t maxRetries = MAX_HTTP_RETRIES);
 
 #endif
