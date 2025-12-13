@@ -85,20 +85,11 @@ static void showInitPattern()
     lc.setChar(1, 3, '3', false);
 }
 
-// Error pattern with code:
-//  - All digits show '-' (G segment) by default
-//  - Device 1 digits 0,5,1 show 'E'
-//  - Device 1 digits 6,4,3 show error code ('1','2','3')
 static void showErrorCode(char codeChar)
 {
-    // First fill everything with '-'
-    for (int dev = 0; dev < 2; dev++)
-    {
-        for (int digit = 0; digit < 8; digit++)
-        {
-            lc.setChar(dev, digit, '-', false);
-        }
-    }
+    // Clear both devices so no '-' segments are shown
+    lc.clearDisplay(0);
+    lc.clearDisplay(1);
 
     // Left error column (E): 1,0 / 1,5 / 1,1
     lc.setChar(1, 0, 'E', false);
