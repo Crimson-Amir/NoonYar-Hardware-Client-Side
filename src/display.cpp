@@ -117,8 +117,20 @@ void showNumbers(int a, int b, int c)
     {
         // Only update the main customer digits so we don't disturb cook display on 0,4
         lc.setDigit(0, 0, a % 10, false);
+        delayMicroseconds(50);
         lc.setDigit(0, 2, b % 10, false);
+        delayMicroseconds(50);
         lc.setDigit(0, 3, c % 10, false);
+        delayMicroseconds(50);
+
+        // Refresh all other displays to maintain proper multiplexing
+        // This prevents brightness issues when certain digit patterns are set
+        showBakerDisplay();
+        delayMicroseconds(100);
+        showDeliveryDisplay();
+        delayMicroseconds(100);
+        showCookDisplay();
+        delayMicroseconds(100);
     }
 }
 
@@ -129,14 +141,18 @@ void showOwnerBreadCounts()
     if (displayMode != DISPLAY_MODE_BAKER || bakerTotal <= 0)
     {
         lc.setRow(1, 6, 0);
+        delayMicroseconds(50);
         lc.setRow(1, 4, 0);
+        delayMicroseconds(50);
         lc.setRow(1, 3, 0);
         return;
     }
 
     // Show baker-display bread counts on device 1 digits 6,4,3
     lc.setDigit(1, 6, bread1_count_baker_display % 10, false);
+    delayMicroseconds(50);
     lc.setDigit(1, 4, bread2_count_baker_display % 10, false);
+    delayMicroseconds(50);
     lc.setDigit(1, 3, bread3_count_baker_display % 10, false);
 }
 
@@ -153,14 +169,18 @@ void showDeliveryDisplay()
     if (displayMode != DISPLAY_MODE_DELIVERY || deliveryTotal <= 0)
     {
         lc.setRow(1, 0, 0);
+        delayMicroseconds(50);
         lc.setRow(1, 5, 0);
+        delayMicroseconds(50);
         lc.setRow(1, 1, 0);
         return;
     }
 
     // Show delivery-display counts on device 1 digits 0,5,1
     lc.setDigit(1, 0, bread1_delivery_display % 10, false);
+    delayMicroseconds(50);
     lc.setDigit(1, 5, bread2_delivery_display % 10, false);
+    delayMicroseconds(50);
     lc.setDigit(1, 1, bread3_delivery_display % 10, false);
 }
 
@@ -171,7 +191,9 @@ void showCookDisplay()
     {
         // Nothing to show on cook display: turn digits off
         lc.setRow(1, 2, 0);
+        delayMicroseconds(50);
         lc.setRow(1, 7, 0);
+        delayMicroseconds(50);
         lc.setRow(0, 4, 0);
     }
     else
@@ -180,7 +202,9 @@ void showCookDisplay()
         int c2 = bread2_cook_display > 0 ? bread2_cook_display : 0;
         int c3 = bread3_cook_display > 0 ? bread3_cook_display : 0;
         lc.setDigit(1, 2, c1 % 10, false);
+        delayMicroseconds(50);
         lc.setDigit(1, 7, c2 % 10, false);
+        delayMicroseconds(50);
         lc.setDigit(0, 4, c3 % 10, false);
     }
 }
@@ -190,12 +214,16 @@ void setStatus(DeviceStatus st)
     currentStatus = st;
     // Serial.println("New Status: " + String(st));
     lc.clearDisplay(0);
+    delayMicroseconds(200);  // Allow time for clear to propagate
 
     if (st == STATUS_NORMAL)
     {
         showNumbers(num1, num2, num3);
+        delayMicroseconds(200);
         showBakerDisplay();
+        delayMicroseconds(200);
         showDeliveryDisplay();
+        delayMicroseconds(200);
         showCookDisplay();
     }
     else if (st == STATUS_WIFI_CONNECTING)
