@@ -75,11 +75,11 @@ void mqttPublisherTask(void *param)
                     {
                         if (!mqtt.connected())
                         {
-                            // Serial.println("MQTT disconnected during publish");
+                            Serial.println("MQTT disconnected during publish");
                         }
                         else
                         {
-                            // Serial.println("MQTT publish failed: " + msg.topic + " -> " + msg.payload);
+                            Serial.println("MQTT publish failed: " + msg.topic + " -> " + msg.payload);
                         }
                     }
                 }
@@ -103,7 +103,7 @@ void mqttPublisherTask(void *param)
                                 mqttMessageQueue.pop_front();
                             }
                             queueOverflowCount = 0;
-                            // Serial.println("MQTT queue overflow - cleared " + String(clearCount) + " messages");
+                            Serial.println("MQTT queue overflow - cleared " + String(clearCount) + " messages");
                         }
                     }
                     else

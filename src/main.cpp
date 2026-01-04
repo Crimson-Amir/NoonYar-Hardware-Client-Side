@@ -15,8 +15,12 @@ void setup()
 {
     // Filesystem / GM66 scanner on UART0 (RX0/TX0)
     Serial.begin(9600);
+    Serial1.begin(9600, SERIAL_8N1, 35, 32);
+    Serial1.setTimeout(25);
     delay(3000);
     LittleFS.begin();
+
+    initPrinter();
 
     // Display init
     lc.shutdown(0, false);
@@ -55,7 +59,7 @@ void setup()
     pinMode(35, INPUT);
     pinMode(BUTTON_PIN, INPUT);
     pinMode(BUZZER_PIN, OUTPUT);
-    digitalWrite(BUZZER_PIN, LOW);
+    digitalWrite(BUZZER_PIN, BUZZER_OFF_LEVEL);
 }
 
 void loop()

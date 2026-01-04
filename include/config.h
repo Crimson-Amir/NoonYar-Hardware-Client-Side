@@ -20,6 +20,8 @@
 
 // Buzzer pin
 #define BUZZER_PIN 19
+#define BUZZER_ON_LEVEL HIGH
+#define BUZZER_OFF_LEVEL LOW
 
 // Confirmation button pin
 #define CONFIRM_BUTTON_PIN 4
@@ -29,10 +31,10 @@
 
 // Button matrix pins (3x3)
 #define ROW1_PIN 13
-#define ROW2_PIN 14
-#define ROW3_PIN 27
-#define COL1_PIN 25
-#define COL2_PIN 26
+#define ROW2_PIN 27
+#define ROW3_PIN 14
+#define COL1_PIN 26
+#define COL2_PIN 25
 #define COL3_PIN 33
 
 // ---------- NETWORK CONFIG ----------

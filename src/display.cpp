@@ -27,10 +27,10 @@ static void showBaseGPattern()
     lc.clearDisplay(1);
 
     // Device 0: digits 0,2,3,4
-    lc.setChar(0, 0, '-', false);
-    lc.setChar(0, 2, '-', false);
     lc.setChar(0, 3, '-', false);
-    lc.setChar(0, 4, '-', false);
+    lc.setChar(0, 1, '-', false);
+    lc.setChar(0, 2, '-', false);
+    lc.setChar(0, 7, '-', false);
 
     // Device 1: digits 2,7
     lc.setChar(1, 2, '-', false);
@@ -107,11 +107,11 @@ void showNumbers(int a, int b, int c)
     if (currentStatus == STATUS_NORMAL && !confirmationMode)
     {
         // Only update the main customer digits so we don't disturb cook display on 0,4
-        lc.setDigit(0, 0, a % 10, false);
+        lc.setDigit(0, 3, a % 10, false);
         delayMicroseconds(50);
-        lc.setDigit(0, 2, b % 10, false);
+        lc.setDigit(0, 1, b % 10, false);
         delayMicroseconds(50);
-        lc.setDigit(0, 3, c % 10, false);
+        lc.setDigit(0, 2, c % 10, false);
         delayMicroseconds(50);
 
         // Refresh all other displays to maintain proper multiplexing
@@ -185,7 +185,7 @@ void showCookDisplay()
         delayMicroseconds(50);
         lc.setRow(1, 7, 0);
         delayMicroseconds(50);
-        lc.setRow(0, 4, 0);
+        lc.setRow(0, 7, 0);
     }
     else
     {
@@ -196,7 +196,7 @@ void showCookDisplay()
         delayMicroseconds(50);
         lc.setDigit(1, 7, c2 % 10, false);
         delayMicroseconds(50);
-        lc.setDigit(0, 4, c3 % 10, false);
+        lc.setDigit(0, 7, c3 % 10, false);
     }
 }
 

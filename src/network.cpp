@@ -62,7 +62,7 @@ void ensureConnectivity()
 
     if (WiFi.status() != WL_CONNECTED)
     {
-        // Serial.println("trying to connect to wifi...");
+        Serial.println("trying to connect to wifi...");
         setStatus(STATUS_WIFI_CONNECTING);
         setNetworkBlock(true);
         if (millis() - lastWifiAttempt > WIFI_RECONNECT_INTERVAL)
@@ -78,7 +78,7 @@ void ensureConnectivity()
         {
             if (millis() - lastMqttAttempt > MQTT_RECONNECT_INTERVAL)
             {
-                // Serial.println("trying to connect to mqtt server...");
+                Serial.println("trying to connect to mqtt server...");
                 lastMqttAttempt = millis();
                 setStatus(STATUS_MQTT_CONNECTING);
                 if (mqtt.connect(bakery_id))

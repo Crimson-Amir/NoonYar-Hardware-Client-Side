@@ -12,7 +12,7 @@
 // CSN-A2 Printer (UART) Helpers
 // -----------------------------
 
-HardwareSerial printerSerial(1); // Use UART1 with custom pins (e.g., RX=16, TX=17)
+HardwareSerial printerSerial(2); // Use UART2 with custom pins (RX=16, TX=17)
 
 // Wrapper functions to send ESC/POS commands
 template <size_t N>
@@ -68,7 +68,7 @@ void initDisplayEspNow()
 
     if (esp_now_init() != ESP_OK)
     {
-        // Serial.println("ESP-NOW Init Failed!");
+        Serial.println("ESP-NOW Init Failed!");
         mqttPublishError("tasks:initDisplayEspNow:esp_now_init_failed");
         return;
     }
@@ -80,7 +80,7 @@ void initDisplayEspNow()
 
     if (esp_now_add_peer(&peer) != ESP_OK)
     {
-        // Serial.println("Failed to add ESP-NOW peer");
+        Serial.println("Failed to add ESP-NOW peer");
         mqttPublishError("tasks:initDisplayEspNow:add_peer_failed");
         return;
     }
@@ -107,7 +107,7 @@ bool sendCustomerToDisplay(int ticketId)
         return true;
     }
 
-    // Serial.printf("ESP-NOW send failed (err=%d), re-adding peer and retrying...\n", result);
+    Serial.printf("ESP-NOW send failed (err=%d), re-adding peer and retrying...\n", result);
     mqttPublishError(String("tasks:sendCustomerToDisplay:first_send_failed:err=") + String(result));
 
     // Try to recover by re-adding the peer once, then retry send
@@ -123,7 +123,7 @@ bool sendCustomerToDisplay(int ticketId)
     result = esp_now_send(displayEspNowMac, reinterpret_cast<const uint8_t *>(&value), sizeof(value));
     if (result != ESP_OK)
     {
-        // Serial.printf("ESP-NOW send failed again after reinit (err=%d)\n", result);
+        Serial.printf("ESP-NOW send failed again after reinit (err=%d)\n", result);
         mqttPublishError(String("tasks:sendCustomerToDisplay:retry_failed:err=") + String(result));
         return false;
     }
@@ -205,6 +205,11 @@ void ensurePrinterInitialized()
     initialized = true;
 }
 
+void initPrinter()
+{
+    ensurePrinterInitialized();
+}
+
 // Print a simple ticket with customer ID and QR link, no dates
 void printCustomerTicket(int bakeryId, int ticketId, const String &token)
 {
@@ -246,27 +251,42 @@ void printCustomerTicket(int bakeryId, int ticketId, const String &token)
 }
 
 // -----------------------------
-// GM66 Scanner Helpers (UART0)
+// GM66 Scanner Helpers (UART1)
 // -----------------------------
 
 const byte scannerDisableCmd[] = {0x7E, 0x00, 0x08, 0x01, 0x00, 0xD9, 0xA0, 0xE8, 0x21};
 const byte scannerEnableCmd[] = {0x7E, 0x00, 0x08, 0x01, 0x00, 0xD9, 0x00, 0x5D, 0xCB};
+const byte scannerTriggerCmd[] = {0x7E, 0x00, 0x08, 0x01, 0x00, 0x02, 0x01, 0xAB, 0xCD};
+
+static void wakeScanner()
+{
+    Serial1.write((uint8_t)0x00);
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+    Serial1.write((uint8_t)0x00);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+}
+
+static void triggerScanner()
+{
+    Serial1.write(scannerTriggerCmd, sizeof(scannerTriggerCmd));
+}
 
 void disableScanner()
 {
-    Serial.write(scannerDisableCmd, sizeof(scannerDisableCmd));
+    Serial1.write(scannerDisableCmd, sizeof(scannerDisableCmd));
 }
 
 void enableScanner()
 {
-    // Flush any pending data from scanner so buffered scans during the
-    // blocked period are ignored when we re-enable it.
-    while (Serial.available() > 0)
+    static bool scannerHasBeenWoken = false;
+    if (!scannerHasBeenWoken)
     {
-        Serial.read();
+        wakeScanner();
+        scannerHasBeenWoken = true;
     }
-
-    Serial.write(scannerEnableCmd, sizeof(scannerEnableCmd));
+    Serial1.write(scannerEnableCmd, sizeof(scannerEnableCmd));
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+    triggerScanner();
 }
 
 void fetchInitTask(void *param)
@@ -285,11 +305,17 @@ void fetchInitTask(void *param)
     while (!fetchInitData())
     {
         mqttPublishError("tasks:fetchInitTask failed. retrying ...");
-        // Serial.println("tasks:fetchInitTask failed");
+        Serial.println("tasks:fetchInitTask failed");
         vTaskDelay(INIT_RETRY_DELAY / portTICK_PERIOD_MS);
     }
     // After basic init, try to restore cook display state from server
-    apiInitCookDisplayFromServer();
+    bool cookInitOk = apiInitCookDisplayFromServer();
+    if (cookInitOk && (bread1_cook_display > 0 || bread2_cook_display > 0 || bread3_cook_display > 0))
+    {
+        digitalWrite(BUZZER_PIN, BUZZER_ON_LEVEL);
+        vTaskDelay(500 / portTICK_PERIOD_MS);
+        digitalWrite(BUZZER_PIN, BUZZER_OFF_LEVEL);
+    }
     setStatus(STATUS_NORMAL);
     init_success = true;
     vTaskDelete(NULL);
@@ -328,94 +354,6 @@ void newCustomerTask(void *param)
     vTaskDelete(NULL);
 }
 
-// void ServeTicketTask(void* param) {
-//   int ticketId = *(int*)param;
-//   delete (int*)param;
-
-//   if (!isNetworkReadyForApi()) {
-//     vTaskDelete(NULL);
-//   }
-
-//   if (!tryLockBusy()) {
-//     vTaskDelete(NULL);
-//   }
-
-//   setStatus(STATUS_API_WAITING);
-//   ServeTicketResponse r = apiServeTicket(ticketId);
-//   bool ok = (r.current_ticket_id != -1);
-//   setStatus(ok ? STATUS_NORMAL : STATUS_API_ERROR);
-//   if (!ok) mqttPublishError(String("nt:failed:") + r.error);
-
-//   unlockBusy();
-//   vTaskDelete(NULL);
-// }
-
-// void bakerForceFinish() {
-//   int remaining = 0;
-//   if (waitDeadline > millis()) {
-//     remaining = (waitDeadline - millis()) / 1000;
-//   }
-
-//   int sendValue = (remaining > 0) ? -remaining : 0;
-
-//   int* param = new int(sendValue);
-
-//   if (xTaskCreate(sendTimeoutToServerTask, "sendTimeoutToServerTask", 4096, param, 1, NULL) != pdPASS) {
-//     mqttPublishError("tasks:bakerForceFinish:sendTimeoutToServerTask:failed");
-//     delete param;
-//   }
-
-//   waitDeadline = millis();
-//   timeForReceiveBread = millis();
-
-//   Serial.println(String("Baker forced finish. Sending: ") + String(sendValue) + " sec");
-// }
-
-// void sendTimeoutToServerTask(void* param) {
-//     int seconds = *(int*)param;
-//     delete (int*)param;
-
-//     bakery_timeout_ms = seconds * 1000UL;
-
-//     bool ok = apiUpdateTimeout(seconds);
-//     if (!ok) {
-//         mqttPublishError("tasks:sendTimeoutToServer:apiUpdateTimeout:failed");
-//     } else {
-//         Serial.println(String("Timeout sent to server: ") + seconds + " sec");
-//     }
-
-//     vTaskDelete(NULL);
-// }
-
-// void skipTicketTask(void* param) {
-//   int ticketId = *(int*)param;
-//   delete (int*)param;
-
-//   if (!isNetworkReadyForApi()) {
-//     vTaskDelete(NULL);
-//   }
-
-//   bool ok = apiSkipTicket(ticketId);
-//   if (!ok) mqttPublishError("tasks:skipTicketTask:failed");
-
-//   vTaskDelete(NULL);
-// }
-
-// int calculateCookTime(const CurrentTicketResponse& cur) {
-//   int totalTime = 0;
-//   for (int i = 0; i < cur.bread_count; i++) {
-//     int breadId = cur.breads[i];
-//     int count   = cur.bread_counts[i];
-//     for (int j = 0; j < bread_count; j++) {
-//       if (breads_id[j] == breadId) {
-//         totalTime += count * bread_cook_time[j];
-//         break;
-//       }
-//     }
-//   }
-//   return totalTime;
-// }
-
 void ticketFlowTask(void *param)
 {
     const unsigned long POLL_INTERVAL_NO_CUSTOMER = 300000UL;
@@ -426,7 +364,7 @@ void ticketFlowTask(void *param)
 
         if (!(init_success && isNetworkReadyForApi()))
         {
-            // Serial.println("ticketFlowTask:Waiting for init/network...");
+            Serial.println("ticketFlowTask:Waiting for init/network...");
             vTaskDelay(5000 / portTICK_PERIOD_MS);
             continue;
         }
@@ -435,27 +373,27 @@ void ticketFlowTask(void *param)
 
         if (!hasCustomerInQueue && (now - lastCheckTime < POLL_INTERVAL_NO_CUSTOMER))
         {
-            // Serial.println("ticketFlowTask:no customer in queue and POLL_INTERVAL_NO_CUSTOMER not passed.");
+            Serial.println("ticketFlowTask:no customer in queue and POLL_INTERVAL_NO_CUSTOMER not passed.");
             vTaskDelay(10000 / portTICK_PERIOD_MS);
             continue;
         }
 
-        // Serial.println("ticketFlowTask:hasCustomerInQueue:" + String(hasCustomerInQueue) + "| or time passed");
+        Serial.println("ticketFlowTask:hasCustomerInQueue:" + String(hasCustomerInQueue) + "| or time passed");
         CurrentTicketResponse cur = apiCurrentTicket();
 
         lastCheckTime = now;
-        // Serial.println(String("ticketFlowTask:current_ticket_id: ") + String(cur.current_ticket_id) + " | has_customer_in_queue: " + cur.has_customer_in_queue);
+        Serial.println(String("ticketFlowTask:current_ticket_id: ") + String(cur.current_ticket_id) + " | has_customer_in_queue: " + cur.has_customer_in_queue);
 
         if (cur.has_customer_in_queue == false)
         {
-            // Serial.println("ticketFlowTask:5 second delay");
+            Serial.println("ticketFlowTask:5 second delay");
             vTaskDelay(5000 / portTICK_PERIOD_MS);
             continue;
         }
 
         if (!cur.error.isEmpty() || cur.current_ticket_id < 0)
         {
-            // Serial.println("ticketFlowTask:error or no current_ticket_id. 10 sec delay");
+            Serial.println("ticketFlowTask:error or no current_ticket_id. 10 sec delay");
             vTaskDelay(10000 / portTICK_PERIOD_MS);
             continue;
         }
@@ -490,6 +428,15 @@ void ticketFlowTask(void *param)
 
 void scannerTask(void *pvParameters)
 {
+    static String qrBuf;
+    static bool scannerBootEnabled = false;
+
+    if (!scannerBootEnabled)
+    {
+        enableScanner();
+        scannerBootEnabled = true;
+    }
+
     while (1)
     {
         // Only process scans when network and init are ready
@@ -506,62 +453,87 @@ void scannerTask(void *pvParameters)
             continue;
         }
 
-        if (Serial.available())
+        int processed = 0;
+        while (Serial1.available() > 0 && processed < 256)
         {
-            String qr = Serial.readStringUntil('\n');
-
-            // Expect URLs like: https://noonyar.ir/res/{bakery_id}/{TOKEN}
-            int lastSlash = qr.lastIndexOf('/');
-            if (lastSlash != -1 && lastSlash + 1 < (int)qr.length())
+            processed++;
+            char ch = (char)Serial1.read();
+            if (ch == '\r' || ch == '\n')
             {
-                String token = qr.substring(lastSlash + 1);
-                token.trim();
-
-                // Serial.print("Scanned Token: ");
-                // Serial.println(token);
-
-                ServeTicketResponse resp = apiServeTicket(token);
-                if (!resp.error.isEmpty())
+                if (!qrBuf.isEmpty())
                 {
-                    if (resp.error == "ticket_is_not_in_wait_list")
+                    String qr = qrBuf;
+                    qrBuf = "";
+                    qr.trim();
+
+                    // Expect URLs like: https://noonyar.ir/res/{bakery_id}/{TOKEN}
+                    int lastSlash = qr.lastIndexOf('/');
+                    if (lastSlash != -1 && lastSlash + 1 < (int)qr.length())
                     {
-                        // Serial.println("ticket_is_not_in_wait_list");
-                        // No buzzer for this case anymore
+                        String token = qr.substring(lastSlash + 1);
+                        token.trim();
+
+                        if (!token.isEmpty())
+                        {
+                            ServeTicketResponse resp = apiServeTicket(token);
+                            if (!resp.error.isEmpty())
+                            {
+                                if (resp.error != "ticket_is_not_in_wait_list")
+                                {
+                                    mqttPublishError("tasks:scannerTask:apiServeTicket response failed: " + resp.error);
+                                }
+                                triggerScanner();
+                            }
+                            else
+                            {
+                                Serial.println("success: " + String(resp.bread_counts[0]) + String(resp.bread_counts[1]));
+                                bread1_delivery_display = resp.bread_counts[0];
+                                bread2_delivery_display = resp.bread_counts[1];
+                                bread3_delivery_display = resp.bread_counts[2];
+
+                                deliveryPending = true;
+
+                                if (displayMode == DISPLAY_MODE_NONE)
+                                {
+                                    displayMode = DISPLAY_MODE_DELIVERY;
+                                }
+                                showDeliveryDisplay();
+
+                                disableScanner();
+
+                                digitalWrite(BUZZER_PIN, BUZZER_ON_LEVEL);
+                                vTaskDelay(500 / portTICK_PERIOD_MS);
+                                digitalWrite(BUZZER_PIN, BUZZER_OFF_LEVEL);
+                            }
+                        }
+                        else
+                        {
+                            triggerScanner();
+                        }
                     }
                     else
                     {
-                        mqttPublishError("tasks:scannerTask:apiNextTicke reponse failed: " + resp.error);
+                        triggerScanner();
                     }
                 }
-                else
-                {
-                    // success
-                    // Serial.println("success: " + String(resp.bread_counts[0]) + String(resp.bread_counts[1]));
-                    // Directly map ServeTicketResponse bread_counts into delivery display slots
-                    bread1_delivery_display = resp.bread_counts[0];
-                    bread2_delivery_display = resp.bread_counts[1];
-                    bread3_delivery_display = resp.bread_counts[2];
+                continue;
+            }
 
-                    // Mark that a delivery is now pending baker confirmation
-                    deliveryPending = true;
+            if ((uint8_t)ch < 0x20)
+            {
+                continue;
+            }
 
-                    // If nothing is currently shown, switch to delivery mode now
-                    if (displayMode == DISPLAY_MODE_NONE)
-                    {
-                        displayMode = DISPLAY_MODE_DELIVERY;
-                    }
-                    showDeliveryDisplay();
-
-                    // Disable scanner light/scan while this delivery is pending
-                    disableScanner();
-
-                    // BUZZER success pattern: single 500ms beep
-                    digitalWrite(BUZZER_PIN, HIGH);
-                    vTaskDelay(500 / portTICK_PERIOD_MS);
-                    digitalWrite(BUZZER_PIN, LOW);
-                }
+            if (qrBuf.length() < 256)
+            {
+                qrBuf += ch;
+            }
+            else
+            {
+                qrBuf = "";
             }
         }
+
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 }
@@ -636,10 +608,10 @@ void breadButtonsTask(void *param)
 
                         if (buttonState[row][col])
                         {
-                        // Serial.print("Button PRESSED (row,col): ");
-                        // Serial.print(row);
-                        // Serial.print(", ");
-                        // Serial.println(col);
+                        Serial.print("Button PRESSED (row,col): ");
+                        Serial.print(row);
+                        Serial.print(", ");
+                        Serial.println(col);
                         if (deliveryPending && displayMode == DISPLAY_MODE_DELIVERY && row == 1 && col == 2)
                         {
                             // Accept delivery only on Row1, Col2 when delivery is currently shown
@@ -673,6 +645,13 @@ void breadButtonsTask(void *param)
                                 if (row == 1 && col == 2)
                                 {
                                     // Accept (Row2, Col3) -> send order to server
+                                    if (!(init_success && isNetworkReadyForApi()))
+                                    {
+                                        Serial.println("breadButtonsTask: network not ready for apiNewCustomer");
+                                        vTaskDelay(200 / portTICK_PERIOD_MS);
+                                        break;
+                                    }
+
                                     confirmationAccepted = true;
 
                                     // Build breads vector mapped from bread1..3 to breads_id
@@ -742,9 +721,9 @@ void breadButtonsTask(void *param)
                                             bread3_cook_display = c3;
 
                                             // Buzzer: 500 ms when show_on_display is true
-                                            digitalWrite(BUZZER_PIN, HIGH);
+                                            digitalWrite(BUZZER_PIN, BUZZER_ON_LEVEL);
                                             vTaskDelay(500 / portTICK_PERIOD_MS);
-                                            digitalWrite(BUZZER_PIN, LOW);
+                                            digitalWrite(BUZZER_PIN, BUZZER_OFF_LEVEL);
                                         }
 
                                         // Success: reset bread counts and delivery display, unlock buttons
@@ -943,11 +922,11 @@ void confirmButtonTask(void *param)
                         int totalBread = bread1_count + bread2_count + bread3_count;
                         if (totalBread <= 0)
                         {
-                            // Serial.println("Confirm button ignored: all bread counts are zero");
+                            Serial.println("Confirm button ignored: all bread counts are zero");
                         }
                         else
                         {
-                            // Serial.println("Confirm button pressed -> entering confirmation mode");
+                            Serial.println("Confirm button pressed -> entering confirmation mode");
 
                             // First enter confirmation mode and update baker display
                             confirmationMode = true;
@@ -967,9 +946,9 @@ void confirmButtonTask(void *param)
                             showBakerDisplay();
 
                             // Then play 500 ms buzzer to notify baker
-                            digitalWrite(BUZZER_PIN, HIGH);
+                            digitalWrite(BUZZER_PIN, BUZZER_ON_LEVEL);
                             vTaskDelay(500 / portTICK_PERIOD_MS);
-                            digitalWrite(BUZZER_PIN, LOW);
+                            digitalWrite(BUZZER_PIN, BUZZER_OFF_LEVEL);
                         }
                     }
                 }
@@ -1003,9 +982,9 @@ void confirmAnimationTask(void *param)
             byte mask = segmentMasks[step];
 
             // Always animate customer-facing digits 0,2,3 on device 0
-            lc.setRow(0, 0, mask);
-            lc.setRow(0, 2, mask);
             lc.setRow(0, 3, mask);
+            lc.setRow(0, 1, mask);
+            lc.setRow(0, 2, mask);
 
             // Only touch baker-side digits when baker display is the active mode
             if (displayMode == DISPLAY_MODE_BAKER)
@@ -1098,14 +1077,14 @@ void newBreadButtonTask(void *param)
                         {
                             for (int i = 0; i < 3; ++i)
                             {
-                                digitalWrite(BUZZER_PIN, HIGH);
+                                digitalWrite(BUZZER_PIN, BUZZER_ON_LEVEL);
                                 showCookDisplay();
                                 vTaskDelay(300 / portTICK_PERIOD_MS);
 
-                                digitalWrite(BUZZER_PIN, LOW);
+                                digitalWrite(BUZZER_PIN, BUZZER_OFF_LEVEL);
                                 lc.setRow(1, 2, 0);
                                 lc.setRow(1, 7, 0);
-                                lc.setRow(0, 4, 0);
+                                lc.setRow(0, 7, 0);
                                 vTaskDelay(200 / portTICK_PERIOD_MS);
                             }
 

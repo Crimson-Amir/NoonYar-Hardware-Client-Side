@@ -21,6 +21,7 @@ void newBreadButtonTask(void *param);
 // void upcomingBreadTask(void* param);
 
 void printCustomerTicket(int bakeryId, int ticketId, const String &token);
+void initPrinter();
 
 void initDisplayEspNow();
 bool sendCustomerToDisplay(int ticketId);
