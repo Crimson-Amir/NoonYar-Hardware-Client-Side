@@ -12,9 +12,19 @@
 #define EXPECTED_BREAD_TYPES 3
 
 // MAX7219 pins
-#define DIN_PIN 23
 #define CLK_PIN 18
-#define CS_PIN 5
+
+// Display 1 (previous single-module wiring)
+#define DIN_1 23
+#define CS_1 5
+
+// Display 2 (separate module)
+#define DIN_2 21
+#define CS_2 22
+
+// Backward compatible aliases (treated as display 1)
+#define DIN_PIN DIN_1
+#define CS_PIN CS_1
 #define RXD2 16
 #define TXD2 17
 

@@ -25,10 +25,10 @@ void setup()
     // Display init
     lc.shutdown(0, false);
     lc.clearDisplay(0);
-    lc.setIntensity(0, 12);  // Reduced from 15 to minimize EMI/noise between devices
+    lc.setIntensity(0, 9);  // Reduced from 15 to minimize EMI/noise between devices
     lc.shutdown(1, false);
     lc.clearDisplay(1);
-    lc.setIntensity(1, 12);  // Reduced from 15 to minimize EMI/noise between devices
+    lc.setIntensity(1, 9);  // Reduced from 15 to minimize EMI/noise between devices
 
     // Mutex initialization
     busyMutex = xSemaphoreCreateMutex();

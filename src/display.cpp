@@ -1,7 +1,7 @@
 #include "display.h"
 
 // ---------- DISPLAY OBJECTS ----------
-LedControl lc(DIN_PIN, CLK_PIN, CS_PIN, 2);
+DualLedControl lc(DIN_1, CLK_PIN, CS_1, DIN_2, CS_2);
 volatile DeviceStatus currentStatus = STATUS_NORMAL;
 int num1 = 0;
 int num2 = 0;
@@ -27,14 +27,14 @@ static void showBaseGPattern()
     lc.clearDisplay(1);
 
     // Device 0: digits 0,2,3,4
-    lc.setChar(0, 3, '-', false);
-    lc.setChar(0, 1, '-', false);
+    lc.setChar(0, 0, '-', false);
     lc.setChar(0, 2, '-', false);
-    lc.setChar(0, 7, '-', false);
+    lc.setChar(0, 1, '-', false);
+    lc.setChar(0, 3, '-', false);
 
     // Device 1: digits 2,7
-    lc.setChar(1, 2, '-', false);
-    lc.setChar(1, 7, '-', false);
+    lc.setChar(1, 0, '-', false);
+    lc.setChar(1, 1, '-', false);
 }
 
 // WiFi connecting pattern
@@ -44,13 +44,13 @@ static void showWifiConnectingPattern()
 {
     showBaseGPattern();
 
-    lc.setChar(1, 0, 'C', false);
-    lc.setChar(1, 5, 'C', false);
-    lc.setChar(1, 1, 'C', false);
+    lc.setChar(1, 2, 'C', false);
+    lc.setChar(1, 3, 'C', false);
+    lc.setChar(1, 4, 'C', false);
 
+    lc.setChar(1, 5, '1', false);
     lc.setChar(1, 6, '1', false);
-    lc.setChar(1, 4, '1', false);
-    lc.setChar(1, 3, '1', false);
+    lc.setChar(1, 7, '1', false);
 }
 
 // MQTT connecting pattern
@@ -60,13 +60,13 @@ static void showMqttConnectingPattern()
 {
     showBaseGPattern();
 
-    lc.setChar(1, 0, 'C', false);
-    lc.setChar(1, 5, 'C', false);
-    lc.setChar(1, 1, 'C', false);
+    lc.setChar(1, 2, 'C', false);
+    lc.setChar(1, 3, 'C', false);
+    lc.setChar(1, 4, 'C', false);
 
+    lc.setChar(1, 5, '2', false);
     lc.setChar(1, 6, '2', false);
-    lc.setChar(1, 4, '2', false);
-    lc.setChar(1, 3, '2', false);
+    lc.setChar(1, 7, '2', false);
 }
 
 // API waiting / init connecting pattern
@@ -76,13 +76,13 @@ static void showInitPattern()
 {
     showBaseGPattern();
 
-    lc.setChar(1, 0, 'C', false);
-    lc.setChar(1, 5, 'C', false);
-    lc.setChar(1, 1, 'C', false);
+    lc.setChar(1, 2, 'C', false);
+    lc.setChar(1, 3, 'C', false);
+    lc.setChar(1, 4, 'C', false);
 
+    lc.setChar(1, 5, '3', false);
     lc.setChar(1, 6, '3', false);
-    lc.setChar(1, 4, '3', false);
-    lc.setChar(1, 3, '3', false);
+    lc.setChar(1, 7, '3', false);
 }
 
 static void showErrorCode(char codeChar)
@@ -92,14 +92,14 @@ static void showErrorCode(char codeChar)
     lc.clearDisplay(1);
 
     // Left error column (E): 1,0 / 1,5 / 1,1
-    lc.setChar(1, 0, 'E', false);
-    lc.setChar(1, 5, 'E', false);
-    lc.setChar(1, 1, 'E', false);
+    lc.setChar(1, 2, 'E', false);
+    lc.setChar(1, 3, 'E', false);
+    lc.setChar(1, 4, 'E', false);
 
     // Right error column (code): 1,6 / 1,4 / 1,3
+    lc.setChar(1, 5, codeChar, false);
     lc.setChar(1, 6, codeChar, false);
-    lc.setChar(1, 4, codeChar, false);
-    lc.setChar(1, 3, codeChar, false);
+    lc.setChar(1, 7, codeChar, false);
 }
 
 void showNumbers(int a, int b, int c)
@@ -107,11 +107,11 @@ void showNumbers(int a, int b, int c)
     if (currentStatus == STATUS_NORMAL && !confirmationMode)
     {
         // Only update the main customer digits so we don't disturb cook display on 0,4
-        lc.setDigit(0, 3, a % 10, false);
+        lc.setDigit(0, 0, a % 10, false);
         delayMicroseconds(50);
-        lc.setDigit(0, 1, b % 10, false);
+        lc.setDigit(0, 2, b % 10, false);
         delayMicroseconds(50);
-        lc.setDigit(0, 2, c % 10, false);
+        lc.setDigit(0, 1, c % 10, false);
         delayMicroseconds(50);
 
         // Refresh all other displays to maintain proper multiplexing
@@ -131,20 +131,20 @@ void showOwnerBreadCounts()
     // Only show baker display when in BAKER mode and there's something to show
     if (displayMode != DISPLAY_MODE_BAKER || bakerTotal <= 0)
     {
+        lc.setRow(1, 5, 0);
+        delayMicroseconds(50);
         lc.setRow(1, 6, 0);
         delayMicroseconds(50);
-        lc.setRow(1, 4, 0);
-        delayMicroseconds(50);
-        lc.setRow(1, 3, 0);
+        lc.setRow(1, 7, 0);
         return;
     }
 
     // Show baker-display bread counts on device 1 digits 6,4,3
-    lc.setDigit(1, 6, bread1_count_baker_display % 10, false);
+    lc.setDigit(1, 5, bread1_count_baker_display % 10, false);
     delayMicroseconds(50);
-    lc.setDigit(1, 4, bread2_count_baker_display % 10, false);
+    lc.setDigit(1, 6, bread2_count_baker_display % 10, false);
     delayMicroseconds(50);
-    lc.setDigit(1, 3, bread3_count_baker_display % 10, false);
+    lc.setDigit(1, 7, bread3_count_baker_display % 10, false);
 }
 
 void showBakerDisplay()
@@ -159,20 +159,20 @@ void showDeliveryDisplay()
     // Only show delivery display when in DELIVERY mode and there's something to show
     if (displayMode != DISPLAY_MODE_DELIVERY || deliveryTotal <= 0)
     {
-        lc.setRow(1, 0, 0);
+        lc.setRow(1, 2, 0);
         delayMicroseconds(50);
-        lc.setRow(1, 5, 0);
+        lc.setRow(1, 3, 0);
         delayMicroseconds(50);
-        lc.setRow(1, 1, 0);
+        lc.setRow(1, 4, 0);
         return;
     }
 
     // Show delivery-display counts on device 1 digits 0,5,1
-    lc.setDigit(1, 0, bread1_delivery_display % 10, false);
+    lc.setDigit(1, 2, bread1_delivery_display % 10, false);
     delayMicroseconds(50);
-    lc.setDigit(1, 5, bread2_delivery_display % 10, false);
+    lc.setDigit(1, 3, bread2_delivery_display % 10, false);
     delayMicroseconds(50);
-    lc.setDigit(1, 1, bread3_delivery_display % 10, false);
+    lc.setDigit(1, 4, bread3_delivery_display % 10, false);
 }
 
 void showCookDisplay()
@@ -181,22 +181,22 @@ void showCookDisplay()
     if (bread1_cook_display <= 0 && bread2_cook_display <= 0 && bread3_cook_display <= 0)
     {
         // Nothing to show on cook display: turn digits off
-        lc.setRow(1, 2, 0);
+        lc.setRow(1, 0, 0);
         delayMicroseconds(50);
-        lc.setRow(1, 7, 0);
+        lc.setRow(1, 1, 0);
         delayMicroseconds(50);
-        lc.setRow(0, 7, 0);
+        lc.setRow(0, 3, 0);
     }
     else
     {
         int c1 = bread1_cook_display > 0 ? bread1_cook_display : 0;
         int c2 = bread2_cook_display > 0 ? bread2_cook_display : 0;
         int c3 = bread3_cook_display > 0 ? bread3_cook_display : 0;
-        lc.setDigit(1, 2, c1 % 10, false);
+        lc.setDigit(1, 0, c1 % 10, false);
         delayMicroseconds(50);
-        lc.setDigit(1, 7, c2 % 10, false);
+        lc.setDigit(1, 1, c2 % 10, false);
         delayMicroseconds(50);
-        lc.setDigit(0, 7, c3 % 10, false);
+        lc.setDigit(0, 3, c3 % 10, false);
     }
 }
 

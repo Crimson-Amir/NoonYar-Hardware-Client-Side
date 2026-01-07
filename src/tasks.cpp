@@ -618,9 +618,9 @@ void breadButtonsTask(void *param)
                             bread1_delivery_display = 0;
                             bread2_delivery_display = 0;
                             bread3_delivery_display = 0;
-                            lc.setRow(1, 0, 0);
-                            lc.setRow(1, 5, 0);
-                            lc.setRow(1, 1, 0);
+                            lc.setRow(1, 2, 0);
+                            lc.setRow(1, 3, 0);
+                            lc.setRow(1, 4, 0);
                             deliveryPending = false;
 
                             // Re-enable scanner once baker has confirmed this delivery
@@ -739,9 +739,9 @@ void breadButtonsTask(void *param)
                                         bread3_count_baker_display = 0;
 
                                         // Clear baker digits (1,6 / 1,4 / 1,3)
+                                        lc.setRow(1, 5, 0);
                                         lc.setRow(1, 6, 0);
-                                        lc.setRow(1, 4, 0);
-                                        lc.setRow(1, 3, 0);
+                                        lc.setRow(1, 7, 0);
 
                                         uploadInProgress = false;
                                         confirmationMode = false;
@@ -780,9 +780,9 @@ void breadButtonsTask(void *param)
                                     bread3_count_baker_display = 0;
 
                                     // Clear owner digits on device 1
+                                    lc.setRow(1, 5, 0);
                                     lc.setRow(1, 6, 0);
-                                    lc.setRow(1, 4, 0);
-                                    lc.setRow(1, 3, 0);
+                                    lc.setRow(1, 7, 0);
 
                                     // Show reset counts on main display (0,0 - 0,2 - 0,3)
                                     showNumbers(num1, num2, num3);
@@ -982,9 +982,9 @@ void confirmAnimationTask(void *param)
             byte mask = segmentMasks[step];
 
             // Always animate customer-facing digits 0,2,3 on device 0
-            lc.setRow(0, 3, mask);
-            lc.setRow(0, 1, mask);
+            lc.setRow(0, 0, mask);
             lc.setRow(0, 2, mask);
+            lc.setRow(0, 1, mask);
 
             // Only touch baker-side digits when baker display is the active mode
             if (displayMode == DISPLAY_MODE_BAKER)
@@ -992,9 +992,9 @@ void confirmAnimationTask(void *param)
                 if (uploadInProgress)
                 {
                     // During upload, animate baker display digits 1,6 / 1,4 / 1,3
+                    lc.setRow(1, 5, mask);
                     lc.setRow(1, 6, mask);
-                    lc.setRow(1, 4, mask);
-                    lc.setRow(1, 3, mask);
+                    lc.setRow(1, 7, mask);
                 }
                 else
                 {
@@ -1082,9 +1082,9 @@ void newBreadButtonTask(void *param)
                                 vTaskDelay(300 / portTICK_PERIOD_MS);
 
                                 digitalWrite(BUZZER_PIN, BUZZER_OFF_LEVEL);
-                                lc.setRow(1, 2, 0);
-                                lc.setRow(1, 7, 0);
-                                lc.setRow(0, 7, 0);
+                                lc.setRow(1, 0, 0);
+                                lc.setRow(1, 1, 0);
+                                lc.setRow(0, 3, 0);
                                 vTaskDelay(200 / portTICK_PERIOD_MS);
                             }
 
