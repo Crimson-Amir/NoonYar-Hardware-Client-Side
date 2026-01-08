@@ -27,6 +27,7 @@ void checkDeadlock()
     if (busyLockedAt > 0 && millis() - busyLockedAt > DEADLOCK_TIMEOUT)
     {
         mqttPublishError("deadlock_detected_rebooting");
+        Serial.printf("deadlock: busy held %lu ms (timeout=%u) -> restarting\n", (unsigned long)(millis() - busyLockedAt), (unsigned)DEADLOCK_TIMEOUT);
         ESP.restart();
     }
 }

@@ -9,12 +9,15 @@
 #include "api.h"
 #include "tasks.h"
 
+#include <esp_system.h>
+
 #define BUTTON_PIN 34
 
 void setup()
 {
     // Filesystem / GM66 scanner on UART0 (RX0/TX0)
     Serial.begin(9600);
+    Serial.printf("boot: esp_reset_reason=%d\n", (int)esp_reset_reason());
     Serial1.begin(9600, SERIAL_8N1, 35, 32);
     Serial1.setTimeout(25);
     delay(3000);

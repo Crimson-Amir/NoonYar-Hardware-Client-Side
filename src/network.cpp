@@ -98,6 +98,7 @@ void ensureConnectivity()
                 }
                 else
                 {
+                    mqttPublishError("network:ensureConnectivity:mqtt_connect_failed");
                     setNetworkBlock(true);
                     setStatus(STATUS_MQTT_ERROR);
                 }
@@ -149,6 +150,13 @@ HttpResponse sendHttpRequest(const String &url, const char *method, const String
             http.end();
             return resp;
         }
+
+        mqttPublishError(
+            String("network:sendHttpRequest:attempt_failed:attempt=") + String(attempt + 1) +
+            String("/") + String(maxRetries) +
+            String(" code=") + String(code) +
+            String(" method=") + String(method) +
+            String(" url=") + url);
 
         http.end();
 
