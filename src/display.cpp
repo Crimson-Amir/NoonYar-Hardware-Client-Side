@@ -37,36 +37,22 @@ static void showBaseGPattern()
     lc.setChar(1, 1, '-', false);
 }
 
-// WiFi connecting pattern
-//  - Base G pattern on specified digits
-//  - Device 1: 0,1,5 -> 'C'; 3,4,6 -> '1'
+// WiFi connecting indicator:
+// show only number 1 on first MAX7219 (device 0)
 static void showWifiConnectingPattern()
 {
-    showBaseGPattern();
-
-    lc.setChar(1, 2, 'C', false);
-    lc.setChar(1, 3, 'C', false);
-    lc.setChar(1, 4, 'C', false);
-
-    lc.setChar(1, 5, '1', false);
-    lc.setChar(1, 6, '1', false);
-    lc.setChar(1, 7, '1', false);
+    lc.clearDisplay(0);
+    lc.clearDisplay(1);
+    lc.setDigit(0, 0, 1, false);
 }
 
-// MQTT connecting pattern
-//  - Base G pattern on specified digits
-//  - Device 1: 0,1,5 -> 'C'; 3,4,6 -> '2'
+// MQTT connecting indicator:
+// show only number 2 on first MAX7219 (device 0)
 static void showMqttConnectingPattern()
 {
-    showBaseGPattern();
-
-    lc.setChar(1, 2, 'C', false);
-    lc.setChar(1, 3, 'C', false);
-    lc.setChar(1, 4, 'C', false);
-
-    lc.setChar(1, 5, '2', false);
-    lc.setChar(1, 6, '2', false);
-    lc.setChar(1, 7, '2', false);
+    lc.clearDisplay(0);
+    lc.clearDisplay(1);
+    lc.setDigit(0, 0, 2, false);
 }
 
 // API waiting / init connecting pattern
