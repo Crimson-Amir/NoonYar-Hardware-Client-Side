@@ -8,7 +8,7 @@ WiFiClient net;
 PubSubClient mqtt(net);
 String topic_errors = String("bakery/") + bakery_id + "/error";
 String topic_bread_time = String("bakery/") + bakery_id + "/bread_time_update";
-String topic_customer_queue = String("bakery/") + bakery_id + "/has_customer_in_queue_update";
+String topic_ticket_job = String("bakery/") + bakery_id + "/ticket_job";
 // String topic_upcoming_queue  = String("bakery/") + bakery_id + "/has_upcoming_customer_in_queue_update";
 
 // ---------- NETWORK STATE MANAGEMENT ----------
@@ -83,8 +83,7 @@ void ensureConnectivity()
                 setStatus(STATUS_MQTT_CONNECTING);
                 if (mqtt.connect(bakery_id))
                 {
-                    mqtt.subscribe(topic_bread_time.c_str());
-                    mqtt.subscribe(topic_customer_queue.c_str());
+                    mqtt.subscribe(topic_ticket_job.c_str());
                     // mqtt.subscribe(topic_upcoming_queue.c_str());
                     // If init has not completed yet, stay in INIT visual state (C3 pattern)
                     if (!init_success)

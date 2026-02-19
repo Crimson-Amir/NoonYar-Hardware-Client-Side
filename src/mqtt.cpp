@@ -2,7 +2,55 @@
 #include "network.h"
 #include "api.h"
 #include "mutex.h"
+#include "tasks.h"
 #include <ArduinoJson.h>
+
+
+
+
+static int parseTicketIdFromJson(const JsonDocument &doc)
+{
+    if (!doc["ticket_id"].isNull())
+    {
+        return doc["ticket_id"] | -1;
+    }
+    if (!doc["customer_ticket_id"].isNull())
+    {
+        return doc["customer_ticket_id"] | -1;
+    }
+    return -1;
+}
+
+struct IncomingTicketJob
+{
+    int bakeryId;
+    int ticketId;
+    String token;
+    bool shouldPrint;
+    bool shouldDisplay;
+};
+
+void incomingTicketTask(void *param)
+{
+    IncomingTicketJob *job = static_cast<IncomingTicketJob *>(param);
+
+    if (job->shouldPrint)
+    {
+        printCustomerTicket(job->bakeryId, job->ticketId, job->token);
+    }
+
+    if (job->shouldDisplay)
+    {
+        bool sent = sendCustomerToDisplay(job->ticketId);
+        if (!sent)
+        {
+            mqttPublishError("mqtt:incomingTicketTask:sendCustomerToDisplay failed");
+        }
+    }
+
+    delete job;
+    vTaskDelete(NULL);
+}
 
 // ---------- MQTT QUEUE MANAGEMENT ----------
 SemaphoreHandle_t mqttQueueMutex;
@@ -149,28 +197,63 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
         payloadStr += (char)payload[i];
     }
 
-    // --------- Existing bread_time handling ---------
-    if (String(topic) == topic_bread_time)
-    {
-        xTaskCreatePinnedToCore(
-            fetchInitFromMqttTask,
-            "FetchInitOnMqtt", 4096, NULL, 1, NULL, 1);
-        return;
-    }
+    Serial.println(String("MQTT RX [") + String(topic) + String("]: ") + payloadStr);
 
-    // --------- Update hasCustomerInQueue ---------
-    if (String(topic) == topic_customer_queue)
+    // --------- MQTT print + optional display ---------
+    if (String(topic) == topic_ticket_job)
     {
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, payloadStr);
-        if (doc["state"])
+        if (err)
         {
-            hasCustomerInQueue = doc["state"] | false;
-            // Serial.println("MQTT update: hasCustomerInQueue = " + String(hasCustomerInQueue));
+            mqttPublishError(String("mqtt:mqttCallback:ticket_job invalid_json: ") + err.c_str() + String(" | payload=") + payloadStr);
+            return;
         }
-        else
+
+        int ticketId = parseTicketIdFromJson(doc);
+        if (ticketId < 0)
         {
-            // Serial.println("MQTT invalid payload for customer queue: " + payloadStr);
+            mqttPublishError(String("mqtt:mqttCallback:ticket_job missing ticket_id | payload=") + payloadStr);
+            return;
+        }
+
+        String ticketToken = "";
+        if (!doc["token"].isNull())
+        {
+            ticketToken = String(doc["token"].as<const char *>());
+        }
+
+        bool shouldPrint = doc["print"] | true;
+        bool shouldDisplay = doc["show_on_display"] | true;
+
+        if (shouldPrint && ticketToken.isEmpty())
+        {
+            mqttPublishError(String("mqtt:mqttCallback:ticket_job missing token for print | payload=") + payloadStr);
+            return;
+        }
+
+        int bakeryId = doc["bakery_id"] | atoi(bakery_id);
+
+        IncomingTicketJob *job = new IncomingTicketJob();
+        job->bakeryId = bakeryId;
+        job->ticketId = ticketId;
+        job->token = ticketToken;
+        job->shouldPrint = shouldPrint;
+        job->shouldDisplay = shouldDisplay;
+
+        BaseType_t ok = xTaskCreatePinnedToCore(
+            incomingTicketTask,
+            "IncomingTicket",
+            6144,
+            job,
+            3,
+            NULL,
+            1);
+
+        if (ok != pdPASS)
+        {
+            delete job;
+            mqttPublishError("mqtt:mqttCallback:ticket_job failed to create task");
         }
         return;
     }
