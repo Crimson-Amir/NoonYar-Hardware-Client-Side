@@ -1,13 +1,13 @@
 #include "config.h"
 
 // ---------- NETWORK CONFIG ----------
-const char *ssid = "Netenza_FDC1D0";
-const char *password = "aA12345!";
+const char *ssid = "Neterbit-1056A9";
+const char *password = "0c1056a9";
 
 const char *bakery_id = "1";
-const char *token = "0q5QnpKVX6OVlGx7eqET3BlC-ftY5-XKZ4mXV-xo-Co";
+const char *token = "CYKAkejLkSZF8psROut8FTi0ngZAH8VhMFJszVmFM-o";
 
-const char *mqtt_server = "77.110.106.199";
+const char *mqtt_server = "37.27.2.215";
 const int mqtt_port = 1883;
 bool hasCustomerInQueue = true;
 bool hasCustomerScanned = false;
