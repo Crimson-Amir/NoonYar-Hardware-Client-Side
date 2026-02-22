@@ -41,5 +41,7 @@ void showOwnerBreadCounts();
 void showBakerDisplay();
 void showDeliveryDisplay();
 void showCookDisplay();
+void updateConnectionProgressDisplay();
+void markMqttReceiveActivity();
 
 #endif
