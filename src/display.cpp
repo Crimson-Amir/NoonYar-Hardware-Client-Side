@@ -1,4 +1,5 @@
 #include "display.h"
+#include "network.h"
 
 // ---------- DISPLAY OBJECTS ----------
 DualLedControl lc(DIN_1, CLK_PIN, CS_1, DIN_2, CS_2);
@@ -37,36 +38,29 @@ static void showBaseGPattern()
     lc.setChar(1, 1, '-', false);
 }
 
-// WiFi connecting pattern
-//  - Base G pattern on specified digits
-//  - Device 1: 0,1,5 -> 'C'; 3,4,6 -> '1'
-static void showWifiConnectingPattern()
+static unsigned long lastMqttReceiveAtMs = 0;
+static bool hasReceivedMqttMessage = false;
+
+void markMqttReceiveActivity()
 {
-    showBaseGPattern();
-
-    lc.setChar(1, 2, 'C', false);
-    lc.setChar(1, 3, 'C', false);
-    lc.setChar(1, 4, 'C', false);
-
-    lc.setChar(1, 5, '1', false);
-    lc.setChar(1, 6, '1', false);
-    lc.setChar(1, 7, '1', false);
+    lastMqttReceiveAtMs = millis();
+    hasReceivedMqttMessage = true;
 }
 
-// MQTT connecting pattern
-//  - Base G pattern on specified digits
-//  - Device 1: 0,1,5 -> 'C'; 3,4,6 -> '2'
-static void showMqttConnectingPattern()
+void updateConnectionProgressDisplay()
 {
-    showBaseGPattern();
+    // Segment 1 (digit 0): WiFi state -> 0 connecting, 1 connected
+    bool wifiConnected = (WiFi.status() == WL_CONNECTED);
+    lc.setDigit(0, 0, wifiConnected ? 1 : 0, false);
 
-    lc.setChar(1, 2, 'C', false);
-    lc.setChar(1, 3, 'C', false);
-    lc.setChar(1, 4, 'C', false);
+    // Segment 2 (digit 2): MQTT state -> 0 connecting/not connected, 1 connected
+    bool mqttConnected = mqtt.connected();
+    lc.setDigit(0, 2, mqttConnected ? 1 : 0, false);
 
-    lc.setChar(1, 5, '2', false);
-    lc.setChar(1, 6, '2', false);
-    lc.setChar(1, 7, '2', false);
+    // Segment 3 (digit 1): MQTT receive activity pulse
+    // Show 1 for 5 seconds after a received MQTT message, otherwise show 0.
+    bool recentMqttRx = hasReceivedMqttMessage && ((millis() - lastMqttReceiveAtMs) <= 5000UL);
+    lc.setDigit(0, 1, recentMqttRx ? 1 : 0, false);
 }
 
 // API waiting / init connecting pattern
@@ -107,11 +101,23 @@ void showNumbers(int a, int b, int c)
     if (currentStatus == STATUS_NORMAL && !confirmationMode)
     {
         // Only update the main customer digits so we don't disturb cook display on 0,4
-        lc.setDigit(0, 0, a % 10, false);
+        // Show '-' instead of 0 so idle/empty state is visually clear.
+        if (a <= 0)
+            lc.setChar(0, 0, '-', false);
+        else
+            lc.setDigit(0, 0, a % 10, false);
         delayMicroseconds(50);
-        lc.setDigit(0, 2, b % 10, false);
+
+        if (b <= 0)
+            lc.setChar(0, 2, '-', false);
+        else
+            lc.setDigit(0, 2, b % 10, false);
         delayMicroseconds(50);
-        lc.setDigit(0, 1, c % 10, false);
+
+        if (c <= 0)
+            lc.setChar(0, 1, '-', false);
+        else
+            lc.setDigit(0, 1, c % 10, false);
         delayMicroseconds(50);
 
         // Refresh all other displays to maintain proper multiplexing
@@ -219,11 +225,11 @@ void setStatus(DeviceStatus st)
     }
     else if (st == STATUS_WIFI_CONNECTING)
     {
-        showWifiConnectingPattern();
+        updateConnectionProgressDisplay();
     }
     else if (st == STATUS_MQTT_CONNECTING)
     {
-        showMqttConnectingPattern();
+        updateConnectionProgressDisplay();
     }
     else if (st == STATUS_WIFI_ERROR)
     {
@@ -239,6 +245,13 @@ void setStatus(DeviceStatus st)
     }
     else if (st == STATUS_INIT || st == STATUS_API_WAITING)
     {
-        showInitPattern();
+        if (st == STATUS_INIT)
+        {
+            updateConnectionProgressDisplay();
+        }
+        else
+        {
+            showInitPattern();
+        }
     }
 }

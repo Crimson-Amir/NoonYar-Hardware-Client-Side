@@ -48,16 +48,23 @@ void setup()
     mqtt.setServer(mqtt_server, mqtt_port);
     mqtt.setCallback(mqttCallback);
 
-    // Start tasks
+    // No boot-time HTTP init in MQTT-only mode.
+    init_success = true;
+
+    // Start only MQTT publisher task.
+    // Current hardware plan: listen for MQTT ticket events,
+    // print tickets, and forward ticket IDs to the display.
     xTaskCreatePinnedToCore(mqttPublisherTask, "MqttPublisher", 4096, NULL, 2, NULL, 0);
-    xTaskCreatePinnedToCore(fetchInitTask, "InitFetchBoot", 4096, NULL, 1, NULL, 1);
-    xTaskCreatePinnedToCore(ticketFlowTask, "TicketFlow", 8192, NULL, 4, NULL, 0);
-    xTaskCreatePinnedToCore(scannerTask, "ScannerTask", 4096, NULL, 3, NULL, 1);
-    xTaskCreatePinnedToCore(breadButtonsTask, "BreadButtons", 4096, NULL, 2, NULL, 1);
-    xTaskCreatePinnedToCore(confirmButtonTask, "ConfirmButton", 2048, NULL, 2, NULL, 1);
-    xTaskCreatePinnedToCore(confirmAnimationTask, "ConfirmAnim", 2048, NULL, 1, NULL, 1);
-    xTaskCreatePinnedToCore(newBreadButtonTask, "NewBreadButton", 4096, NULL, 2, NULL, 1);
-    // xTaskCreatePinnedToCore(upcomingBreadTask, "upcomingBreadTask", 4096, NULL, 2, NULL, 1);
+
+    // Disabled legacy flow/tasks that depend on HTTP polling,
+    // local button matrix input, or QR scanner delivery flow.
+    // xTaskCreatePinnedToCore(fetchInitTask, "InitFetchBoot", 4096, NULL, 1, NULL, 1);
+    // xTaskCreatePinnedToCore(ticketFlowTask, "TicketFlow", 8192, NULL, 4, NULL, 0);
+    // xTaskCreatePinnedToCore(scannerTask, "ScannerTask", 4096, NULL, 3, NULL, 1);
+    // xTaskCreatePinnedToCore(breadButtonsTask, "BreadButtons", 4096, NULL, 2, NULL, 1);
+    // xTaskCreatePinnedToCore(confirmButtonTask, "ConfirmButton", 2048, NULL, 2, NULL, 1);
+    // xTaskCreatePinnedToCore(confirmAnimationTask, "ConfirmAnim", 2048, NULL, 1, NULL, 1);
+    // xTaskCreatePinnedToCore(newBreadButtonTask, "NewBreadButton", 4096, NULL, 2, NULL, 1);
 
     pinMode(35, INPUT);
     pinMode(BUTTON_PIN, INPUT);
@@ -68,5 +75,6 @@ void setup()
 void loop()
 {
     ensureConnectivity();
+    updateConnectionProgressDisplay();
     checkDeadlock();
 }
