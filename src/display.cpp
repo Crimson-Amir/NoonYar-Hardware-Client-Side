@@ -169,11 +169,23 @@ void showNumbers(int a, int b, int c)
     if (currentStatus == STATUS_NORMAL && !confirmationMode)
     {
         // Only update the main customer digits so we don't disturb cook display on 0,4
-        lc.setDigit(0, 0, a % 10, false);
+        // Show '-' instead of 0 so idle/empty state is visually clear.
+        if (a <= 0)
+            lc.setChar(0, 0, '-', false);
+        else
+            lc.setDigit(0, 0, a % 10, false);
         delayMicroseconds(50);
-        lc.setDigit(0, 2, b % 10, false);
+
+        if (b <= 0)
+            lc.setChar(0, 2, '-', false);
+        else
+            lc.setDigit(0, 2, b % 10, false);
         delayMicroseconds(50);
-        lc.setDigit(0, 1, c % 10, false);
+
+        if (c <= 0)
+            lc.setChar(0, 1, '-', false);
+        else
+            lc.setDigit(0, 1, c % 10, false);
         delayMicroseconds(50);
 
         // Refresh all other displays to maintain proper multiplexing
