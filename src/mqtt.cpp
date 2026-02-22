@@ -3,10 +3,12 @@
 #include "api.h"
 #include "mutex.h"
 #include "tasks.h"
+#include "display.h"
 #include <ArduinoJson.h>
 
-
-
+// Keep an explicit declaration here so mqtt.cpp remains buildable
+// even if header visibility changes in some local build environments.
+void markMqttReceiveActivity();
 
 static int parseTicketIdFromJson(const JsonDocument &doc)
 {
