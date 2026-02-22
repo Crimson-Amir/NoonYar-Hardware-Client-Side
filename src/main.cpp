@@ -75,5 +75,6 @@ void setup()
 void loop()
 {
     ensureConnectivity();
+    updateConnectionProgressDisplay();
     checkDeadlock();
 }

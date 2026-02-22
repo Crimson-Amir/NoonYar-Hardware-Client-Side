@@ -1,4 +1,6 @@
 #include "display.h"
+#include "network.h"
+#include "api.h"
 
 // ---------- DISPLAY OBJECTS ----------
 DualLedControl lc(DIN_1, CLK_PIN, CS_1, DIN_2, CS_2);
@@ -37,22 +39,96 @@ static void showBaseGPattern()
     lc.setChar(1, 1, '-', false);
 }
 
-// WiFi connecting indicator:
-// show only number 1 on first MAX7219 (device 0)
-static void showWifiConnectingPattern()
+static void setConnectingDigitsDashState(bool firstReady, bool secondReady, bool thirdReady)
 {
-    lc.clearDisplay(0);
-    lc.clearDisplay(1);
-    lc.setDigit(0, 0, 1, false);
+    if (firstReady)
+        lc.setChar(0, 0, '-', false);
+    if (secondReady)
+        lc.setChar(0, 2, '-', false);
+    if (thirdReady)
+        lc.setChar(0, 1, '-', false);
 }
 
-// MQTT connecting indicator:
-// show only number 2 on first MAX7219 (device 0)
-static void showMqttConnectingPattern()
+static void animateConnectingDigits(uint8_t step, bool animateFirst, bool animateSecond, bool animateThird)
 {
+    // A -> B -> C -> D -> E -> F, then G ('-')
+    const byte segmentMasks[6] = {
+        0b01000000, // A
+        0b00100000, // B
+        0b00010000, // C
+        0b00001000, // D
+        0b00000100, // E
+        0b00000010  // F
+    };
+
+    if (step < 6)
+    {
+        byte mask = segmentMasks[step];
+        if (animateFirst)
+            lc.setRow(0, 0, mask);
+        if (animateSecond)
+            lc.setRow(0, 2, mask);
+        if (animateThird)
+            lc.setRow(0, 1, mask);
+    }
+    else
+    {
+        if (animateFirst)
+            lc.setChar(0, 0, '-', false);
+        if (animateSecond)
+            lc.setChar(0, 2, '-', false);
+        if (animateThird)
+            lc.setChar(0, 1, '-', false);
+    }
+}
+
+void updateConnectionProgressDisplay()
+{
+    if (!(currentStatus == STATUS_WIFI_CONNECTING || currentStatus == STATUS_MQTT_CONNECTING || currentStatus == STATUS_INIT))
+    {
+        return;
+    }
+
+    static unsigned long lastStepAt = 0;
+    static uint8_t animStep = 0;
+
+    if (millis() - lastStepAt < 120)
+    {
+        return;
+    }
+    lastStepAt = millis();
+
+    bool wifiConnected = (WiFi.status() == WL_CONNECTED);
+    bool mqttConnected = mqtt.connected();
+    bool ready = wifiConnected && mqttConnected && init_success;
+
     lc.clearDisplay(0);
     lc.clearDisplay(1);
-    lc.setDigit(0, 0, 2, false);
+
+    if (!wifiConnected)
+    {
+        // Stage 1: animate all three while connecting WiFi
+        animateConnectingDigits(animStep, true, true, true);
+    }
+    else if (!mqttConnected)
+    {
+        // Stage 2: first is fixed '-', animate second+third while connecting MQTT
+        setConnectingDigitsDashState(true, false, false);
+        animateConnectingDigits(animStep, false, true, true);
+    }
+    else if (!ready)
+    {
+        // Stage 3: first+second fixed '-', animate third until fully ready
+        setConnectingDigitsDashState(true, true, false);
+        animateConnectingDigits(animStep, false, false, true);
+    }
+    else
+    {
+        // Stage 4: everything ready -> all three fixed '-'
+        setConnectingDigitsDashState(true, true, true);
+    }
+
+    animStep = (animStep + 1) % 7;
 }
 
 // API waiting / init connecting pattern
@@ -205,11 +281,11 @@ void setStatus(DeviceStatus st)
     }
     else if (st == STATUS_WIFI_CONNECTING)
     {
-        showWifiConnectingPattern();
+        updateConnectionProgressDisplay();
     }
     else if (st == STATUS_MQTT_CONNECTING)
     {
-        showMqttConnectingPattern();
+        updateConnectionProgressDisplay();
     }
     else if (st == STATUS_WIFI_ERROR)
     {
@@ -225,6 +301,13 @@ void setStatus(DeviceStatus st)
     }
     else if (st == STATUS_INIT || st == STATUS_API_WAITING)
     {
-        showInitPattern();
+        if (st == STATUS_INIT)
+        {
+            updateConnectionProgressDisplay();
+        }
+        else
+        {
+            showInitPattern();
+        }
     }
 }
