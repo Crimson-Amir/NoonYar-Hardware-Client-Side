@@ -198,6 +198,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
     }
 
     Serial.println(String("MQTT RX [") + String(topic) + String("]: ") + payloadStr);
+    markMqttReceiveActivity();
 
     // --------- MQTT print + optional display ---------
     if (String(topic) == topic_ticket_job)
