@@ -4,10 +4,10 @@
 const char *ssid = "Neterbit-1056A9";
 const char *password = "0c1056a9";
 
-const char *bakery_id = "1";
-const char *token = "CYKAkejLkSZF8psROut8FTi0ngZAH8VhMFJszVmFM-o";
+const char *bakery_id = "2";
+const char *token = "2JG0hKrpp2o3IGHOLQN128RHXuNYh30GR_vJMYC-Clo";
 
-const char *mqtt_server = "37.27.2.215";
+const char *mqtt_server = "2.189.255.244";
 const int mqtt_port = 1883;
 bool hasCustomerInQueue = true;
 bool hasCustomerScanned = false;
