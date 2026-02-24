@@ -64,7 +64,7 @@ void setup()
     // xTaskCreatePinnedToCore(breadButtonsTask, "BreadButtons", 4096, NULL, 2, NULL, 1);
     // xTaskCreatePinnedToCore(confirmButtonTask, "ConfirmButton", 2048, NULL, 2, NULL, 1);
     // xTaskCreatePinnedToCore(confirmAnimationTask, "ConfirmAnim", 2048, NULL, 1, NULL, 1);
-    // xTaskCreatePinnedToCore(newBreadButtonTask, "NewBreadButton", 4096, NULL, 2, NULL, 1);
+    xTaskCreatePinnedToCore(newBreadButtonTask, "NewBreadButton", 4096, NULL, 2, NULL, 1);
 
     pinMode(35, INPUT);
     pinMode(BUTTON_PIN, INPUT);
