@@ -1024,8 +1024,9 @@ void newBreadButtonTask(void *param)
 
     while (1)
     {
-        // Only accept new-bread events when network and init are ready
-        if (!(init_success && isNetworkReady()))
+        // Only accept new-bread events when WiFi is up.
+        // Init data is not required for the /new_bread HTTP flow.
+        if (WiFi.status() != WL_CONNECTED)
         {
             vTaskDelay(100 / portTICK_PERIOD_MS);
             continue;
